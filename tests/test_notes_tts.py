@@ -535,7 +535,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
     @patch("ppt_speech.notes_tts.embed_audio_autoplay")
     @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts._read_notes_text")
+    @patch("ppt_speech.notes_tts.read_notes_text")
     async def test_process_with_notes(
         self,
         mock_read_notes: MagicMock,
@@ -563,7 +563,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
     @patch("ppt_speech.notes_tts.embed_audio_autoplay")
     @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts._read_notes_text")
+    @patch("ppt_speech.notes_tts.read_notes_text")
     async def test_process_without_notes(
         self,
         mock_read_notes: MagicMock,
@@ -585,7 +585,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
     @patch("ppt_speech.notes_tts.embed_audio_autoplay")
     @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts._read_notes_text")
+    @patch("ppt_speech.notes_tts.read_notes_text")
     async def test_process_multiple_slides(
         self,
         mock_read_notes: MagicMock,
@@ -612,7 +612,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
     @patch("ppt_speech.notes_tts.embed_audio_autoplay")
     @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts._read_notes_text")
+    @patch("ppt_speech.notes_tts.read_notes_text")
     async def test_temp_dir_cleanup_on_success(
         self,
         mock_read_notes: MagicMock,
@@ -635,7 +635,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
     @patch("ppt_speech.notes_tts.embed_audio_autoplay")
     @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts._read_notes_text")
+    @patch("ppt_speech.notes_tts.read_notes_text")
     async def test_temp_dir_cleanup_on_failure(
         self,
         mock_read_notes: MagicMock,
@@ -659,7 +659,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
     @patch("ppt_speech.notes_tts.embed_audio_autoplay")
     @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts._read_notes_text")
+    @patch("ppt_speech.notes_tts.read_notes_text")
     async def test_tts_failure_skips_embed(
         self,
         mock_read_notes: MagicMock,
@@ -677,6 +677,44 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
         await process_slides(mock_prs, self.config)
 
         mock_embed.assert_not_called()
+
+    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
+    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.notes_tts.read_notes_text")
+    async def test_default_temp_dir_uses_system_tempfile(
+        self,
+        mock_read_notes: MagicMock,
+        mock_text_to_mp3: AsyncMock,
+        mock_embed: MagicMock,
+    ) -> None:
+        """temp_audio_dir 为 None 时应使用系统临时目录并自动清理。"""
+        mock_read_notes.return_value = "测试备注"
+        mock_text_to_mp3.return_value = True
+
+        # 不指定 temp_audio_dir，验证默认走系统临时目录（tempfile）路径
+        config = PTSpeechConfig(
+            input_dir=self.temp_dir,
+            output_dir=self.temp_dir,
+            input_filename="input.pptx",
+            output_filename="output.pptx",
+        )
+
+        mock_slide = MagicMock()
+        mock_prs = MagicMock()
+        mock_prs.slides = [mock_slide]
+
+        await process_slides(mock_prs, config)
+
+        # text_to_mp3 的第二个位置参数即为音频文件路径
+        self.assertEqual(mock_text_to_mp3.call_count, 1)
+        used_dir = mock_text_to_mp3.call_args.args[1].parent
+        # 临时目录应位于系统临时目录下，而非当前工作目录的 .tmp_audio
+        self.assertTrue(
+            str(used_dir).startswith(str(Path(tempfile.gettempdir()))),
+            f"临时目录 {used_dir} 不在系统临时目录下",
+        )
+        # 处理完成后该临时目录应已被上下文管理器自动清理
+        self.assertFalse(used_dir.exists())
 
 
 class TestMain(unittest.IsolatedAsyncioTestCase):
@@ -790,7 +828,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
 
     @patch("ppt_speech.notes_tts.Presentation")
     @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts._read_notes_text")
+    @patch("ppt_speech.notes_tts.read_notes_text")
     @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
     async def test_full_pipeline_mock(
         self,
@@ -816,6 +854,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
             output_dir=self.temp_dir,
             input_filename="input.pptx",
             output_filename="output.pptx",
+            temp_audio_dir=self.temp_dir / "temp_audio",
         )
 
         await speak_ppt_notes(config)

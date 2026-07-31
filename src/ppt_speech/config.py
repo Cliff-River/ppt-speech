@@ -25,7 +25,8 @@ class PTSpeechConfig:
         output_filename: 输出 PPT 文件名（不含目录路径）。
         voice_name: 语音名称，格式如 'zh-CN-XiaoxiaoNeural'。
         speech_rate: 语速调整，格式如 '+0%' 或 '-50%'。
-        temp_audio_dir: 临时音频文件存放目录，处理完成后自动清理。
+        temp_audio_dir: 临时音频文件存放目录；为 None 时使用系统临时目录
+            （tempfile）创建，处理完成后自动清理。
         audio_icon_offset: 音频图标在画布上的偏移英寸数，负值可实现视觉隐藏。
         audio_icon_size: 音频图标尺寸（英寸）。
     """
@@ -36,7 +37,7 @@ class PTSpeechConfig:
     output_filename: str = "output.pptx"
     voice_name: str = "zh-CN-XiaoxiaoNeural"
     speech_rate: str = "+0%"
-    temp_audio_dir: Path = field(default_factory=lambda: Path(".tmp_audio"))
+    temp_audio_dir: Path | None = None
     audio_icon_offset: float = -2.0
     audio_icon_size: float = 1.0
 

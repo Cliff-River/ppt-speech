@@ -172,7 +172,7 @@ asyncio.run(text_to_mp3(
 | `output_filename` | `str` | `output.pptx` | 输出文件名 |
 | `voice_name` | `str` | `zh-CN-XiaoxiaoNeural` | Edge TTS 语音名称 |
 | `speech_rate` | `str` | `+0%` | 语速，格式为 `[+-]数字%` |
-| `temp_audio_dir` | `Path` | `.tmp_audio` | 临时音频目录，处理完成后自动清理 |
+| `temp_audio_dir` | `Path \| None` | `None` | 临时音频目录；为 `None` 时使用系统临时目录（`tempfile`），处理完成后自动清理 |
 | `audio_icon_offset` | `float` | `-2.0` | 音频图标偏移（英寸），负值隐藏在画布外 |
 | `audio_icon_size` | `float` | `1.0` | 音频图标尺寸（英寸），必须大于 0 |
 
