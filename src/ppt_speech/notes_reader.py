@@ -9,7 +9,7 @@ from __future__ import annotations
 from pptx.slide import Slide
 
 
-def _read_notes_text(slide: Slide) -> str:
+def read_notes_text(slide: Slide) -> str:
     """从单张幻灯片中提取备注文字。
 
     检查幻灯片是否具备备注页以及备注文本框，

@@ -27,8 +27,8 @@ from ppt_speech.notes_tts import (
     P14_NS,
     PTSpeechConfig,
     _apply_autoplay_timing,
-    _normalize_voice_name,
-    _read_notes_text,
+    normalize_voice_name,
+    read_notes_text,
     embed_audio_autoplay,
     speak_ppt_notes,
     process_slides,
@@ -130,7 +130,7 @@ class TestNormalizeVoiceName(unittest.TestCase):
 
     def test_standard_chinese_voice(self) -> None:
         """测试标准中文语音名称规范化。"""
-        result = _normalize_voice_name("zh-CN-XiaoxiaoNeural")
+        result = normalize_voice_name("zh-CN-XiaoxiaoNeural")
         self.assertEqual(
             result,
             "Microsoft Server Speech Text to Speech Voice"
@@ -139,7 +139,7 @@ class TestNormalizeVoiceName(unittest.TestCase):
 
     def test_standard_english_voice(self) -> None:
         """测试标准英文语音名称规范化。"""
-        result = _normalize_voice_name("en-US-AriaNeural")
+        result = normalize_voice_name("en-US-AriaNeural")
         self.assertEqual(
             result,
             "Microsoft Server Speech Text to Speech Voice"
@@ -148,7 +148,7 @@ class TestNormalizeVoiceName(unittest.TestCase):
 
     def test_voice_with_region_suffix(self) -> None:
         """测试带地区后缀的语音名称规范化。"""
-        result = _normalize_voice_name("zh-CN-Xiaoxiao-YunxiNeural")
+        result = normalize_voice_name("zh-CN-Xiaoxiao-YunxiNeural")
         self.assertEqual(
             result,
             "Microsoft Server Speech Text to Speech Voice"
@@ -161,12 +161,12 @@ class TestNormalizeVoiceName(unittest.TestCase):
             "Microsoft Server Speech Text to Speech Voice"
             " (zh-CN, XiaoxiaoNeural)"
         )
-        result = _normalize_voice_name(full_name)
+        result = normalize_voice_name(full_name)
         self.assertEqual(result, full_name)
 
     def test_non_standard_voice(self) -> None:
         """测试非标准格式的语音名称。"""
-        result = _normalize_voice_name("SomeVoice")
+        result = normalize_voice_name("SomeVoice")
         self.assertEqual(result, "SomeVoice")
 
 
@@ -186,13 +186,13 @@ class TestReadNotesText(unittest.TestCase):
         self.mock_slide.has_notes_slide = True
         self.mock_slide.notes_slide = mock_notes
 
-        result = _read_notes_text(self.mock_slide)
+        result = read_notes_text(self.mock_slide)
         self.assertEqual(result, "这是一段备注文字")
 
     def test_slide_without_notes_slide(self) -> None:
         """测试无备注页的幻灯片。"""
         self.mock_slide.has_notes_slide = False
-        result = _read_notes_text(self.mock_slide)
+        result = read_notes_text(self.mock_slide)
         self.assertEqual(result, "")
 
     def test_slide_with_empty_text_frame(self) -> None:
@@ -203,7 +203,7 @@ class TestReadNotesText(unittest.TestCase):
         self.mock_slide.has_notes_slide = True
         self.mock_slide.notes_slide = mock_notes
 
-        result = _read_notes_text(self.mock_slide)
+        result = read_notes_text(self.mock_slide)
         self.assertEqual(result, "")
 
     def test_slide_with_whitespace_only_notes(self) -> None:
@@ -216,7 +216,7 @@ class TestReadNotesText(unittest.TestCase):
         self.mock_slide.has_notes_slide = True
         self.mock_slide.notes_slide = mock_notes
 
-        result = _read_notes_text(self.mock_slide)
+        result = read_notes_text(self.mock_slide)
         self.assertEqual(result, "")
 
 
@@ -776,7 +776,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
     def test_voice_normalization_roundtrip(self) -> None:
         """测试语音名称规范化往返。"""
         short_name = "zh-CN-XiaoxiaoNeural"
-        full_name = _normalize_voice_name(short_name)
+        full_name = normalize_voice_name(short_name)
         self.assertIn("Microsoft Server Speech Text to Speech Voice", full_name)
         self.assertIn("zh-CN", full_name)
         self.assertIn("XiaoxiaoNeural", full_name)
@@ -784,7 +784,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
     def test_voice_normalization_with_region(self) -> None:
         """测试带地区的语音名称规范化。"""
         short_name = "en-US-AriaNeural"
-        full_name = _normalize_voice_name(short_name)
+        full_name = normalize_voice_name(short_name)
         self.assertIn("en-US", full_name)
         self.assertIn("AriaNeural", full_name)
 

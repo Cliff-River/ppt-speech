@@ -23,7 +23,7 @@ _VOICE_PATTERN = re.compile(r"^([a-z]{2,})-([A-Z]{2,})-(.+Neural)$")
 _RATE_PATTERN = re.compile(r"^[+-]\d+%$")
 
 
-def _normalize_voice_name(voice_name: str) -> str:
+def normalize_voice_name(voice_name: str) -> str:
     """将简短语音名称转换为 edge-tts 完整格式。
 
     短格式示例：'zh-CN-XiaoxiaoNeural'
@@ -109,7 +109,7 @@ async def text_to_mp3(
     if not _RATE_PATTERN.match(speech_rate):
         raise ValueError(f"语速格式错误: '{speech_rate}'，应为 '+0%' 格式")
 
-    full_voice = _normalize_voice_name(voice_name)
+    full_voice = normalize_voice_name(voice_name)
     communicate = Communicate(text, full_voice, rate=speech_rate)
 
     try:

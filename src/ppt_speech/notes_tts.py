@@ -19,29 +19,24 @@ import asyncio
 import shutil
 from typing import Optional
 
-from edge_tts.exceptions import EdgeTTSException
 from pptx import Presentation
-from pptx.slide import Slide
 
 # 重新导出子模块的公共符号，保持原有 notes_tts 模块的 API 兼容性，
 # 这样外部调用方（包括测试）无需修改导入路径即可继续工作。
 from ppt_speech.audio_embedder import (
     P14_NS,
     P_NS,
-    _apply_autoplay_timing,
     embed_audio_autoplay,
 )
 from ppt_speech.config import PTSpeechConfig
-from ppt_speech.notes_reader import _read_notes_text
-from ppt_speech.tts_client import _normalize_voice_name, text_to_mp3
+from ppt_speech.notes_reader import read_notes_text
+from ppt_speech.tts_client import  text_to_mp3
 
 __all__ = [
     "P_NS",
     "P14_NS",
     "PTSpeechConfig",
-    "_apply_autoplay_timing",
-    "_normalize_voice_name",
-    "_read_notes_text",
+    "read_notes_text",
     "embed_audio_autoplay",
     "speak_ppt_notes",
     "process_slides",
@@ -72,7 +67,7 @@ async def process_slides(
 
     try:
         for idx, slide in enumerate(prs.slides, start=1):
-            note_text = _read_notes_text(slide)
+            note_text = read_notes_text(slide)
 
             if not note_text:
                 print(f"【第{idx}页】无备注，跳过配音")
