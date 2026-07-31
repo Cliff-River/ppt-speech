@@ -252,7 +252,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
             )
         self.assertIn("语速格式错误", str(ctx.exception))
 
-    @patch("ppt_speech.notes_tts.Communicate")
+    @patch("ppt_speech.tts_client.Communicate")
     async def test_successful_conversion(
         self, mock_communicate_class: MagicMock
     ) -> None:
@@ -271,7 +271,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         mock_communicate_class.assert_called_once()
         mock_comm.save.assert_called_once()
 
-    @patch("ppt_speech.notes_tts.Communicate")
+    @patch("ppt_speech.tts_client.Communicate")
     async def test_no_audio_received_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
@@ -285,7 +285,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(EdgeTTSException):
             await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
 
-    @patch("ppt_speech.notes_tts.Communicate")
+    @patch("ppt_speech.tts_client.Communicate")
     async def test_unexpected_response_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
@@ -299,7 +299,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(EdgeTTSException):
             await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
 
-    @patch("ppt_speech.notes_tts.Communicate")
+    @patch("ppt_speech.tts_client.Communicate")
     async def test_unknown_response_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
@@ -313,7 +313,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(EdgeTTSException):
             await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
 
-    @patch("ppt_speech.notes_tts.Communicate")
+    @patch("ppt_speech.tts_client.Communicate")
     async def test_websocket_error_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
@@ -327,7 +327,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(EdgeTTSException):
             await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
 
-    @patch("ppt_speech.notes_tts.Communicate")
+    @patch("ppt_speech.tts_client.Communicate")
     async def test_os_error_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
@@ -340,7 +340,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
             await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
         self.assertIn("磁盘错误", str(ctx.exception))
 
-    @patch("ppt_speech.notes_tts.Communicate")
+    @patch("ppt_speech.tts_client.Communicate")
     async def test_custom_voice_and_rate(
         self, mock_communicate_class: MagicMock
     ) -> None:
@@ -360,7 +360,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         self.assertIn("AriaNeural", call_args[0][1])
         self.assertEqual(call_args[1]["rate"], "-30%")
 
-    @patch("ppt_speech.notes_tts.Communicate")
+    @patch("ppt_speech.tts_client.Communicate")
     async def test_creates_parent_directory(
         self, mock_communicate_class: MagicMock
     ) -> None:
