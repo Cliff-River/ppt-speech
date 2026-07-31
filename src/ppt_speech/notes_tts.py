@@ -127,7 +127,7 @@ async def speak_ppt_notes(config: Optional[PTSpeechConfig] = None) -> None:
         OSError: 当文件读写或目录操作失败时。
     """
     if config is None:
-        config = PTSpeechConfig()
+        config = PTSpeechConfig(voice_name="zh-HK-WanLungNeural")
 
     config.validate()
 
