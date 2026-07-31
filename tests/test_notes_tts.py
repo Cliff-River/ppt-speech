@@ -30,7 +30,7 @@ from ppt_speech.notes_tts import (
     _normalize_voice_name,
     _read_notes_text,
     embed_audio_autoplay,
-    main,
+    speak_ppt_notes,
     process_slides,
     text_to_mp3,
 )
@@ -709,7 +709,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             output_filename="output.pptx",
         )
 
-        await main(config)
+        await speak_ppt_notes(config)
 
         mock_presentation.assert_called_once_with(str(self.input_path))
         mock_process.assert_called_once_with(mock_prs, config)
@@ -734,7 +734,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
                 new_callable=PropertyMock,
                 return_value=self.input_path,
             ):
-                await main()
+                await speak_ppt_notes()
 
         mock_presentation.assert_called_once()
         mock_process.assert_called_once()
@@ -745,7 +745,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             input_dir=Path("nonexistent_dir"),
         )
         with self.assertRaises(FileNotFoundError):
-            await main(config)
+            await speak_ppt_notes(config)
 
 
 class TestIntegration(unittest.IsolatedAsyncioTestCase):
@@ -818,7 +818,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
             output_filename="output.pptx",
         )
 
-        await main(config)
+        await speak_ppt_notes(config)
 
         mock_text_to_mp3.assert_called_once()
         mock_embed.assert_called_once()

@@ -43,7 +43,7 @@ __all__ = [
     "_normalize_voice_name",
     "_read_notes_text",
     "embed_audio_autoplay",
-    "main",
+    "speak_ppt_notes",
     "process_slides",
     "text_to_mp3",
 ]
@@ -108,7 +108,7 @@ async def process_slides(
             shutil.rmtree(config.temp_audio_dir, ignore_errors=True)
 
 
-async def main(config: Optional[PTSpeechConfig] = None) -> None:
+async def speak_ppt_notes(config: Optional[PTSpeechConfig] = None) -> None:
     """PPT 配音处理的顶层入口函数。
 
     典型用法：
@@ -141,4 +141,4 @@ async def main(config: Optional[PTSpeechConfig] = None) -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(speak_ppt_notes())
