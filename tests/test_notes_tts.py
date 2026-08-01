@@ -22,20 +22,19 @@ from edge_tts.exceptions import (
 )
 from lxml import etree as lxml_etree
 
-from ppt_speech.notes_tts import (
-    P_NS,
-    P14_NS,
+from ppt_speech import (
     PTSpeechConfig,
-    _apply_autoplay_timing,
-    normalize_voice_name,
-    read_notes_text,
     embed_audio_autoplay,
-    speak_ppt_notes,
+    get_audio_duration,
+    normalize_voice_name,
     process_slides,
+    read_notes_text,
+    set_advance_after_time,
+    speak_ppt_notes,
     text_to_mp3,
 )
-from ppt_speech.audio_duration import get_audio_duration
-from ppt_speech.slide_transition import _set_adv_tm, set_advance_after_time
+from ppt_speech.audio import P14_NS, P_NS, _apply_autoplay_timing
+from ppt_speech.slide_transition import _set_adv_tm
 
 
 NSMAP = {"p": P_NS, "p14": P14_NS}
@@ -548,9 +547,9 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_process_with_notes(
         self,
         mock_read_notes: MagicMock,
@@ -576,9 +575,9 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
         mock_embed.assert_called_once()
         mock_prs.save.assert_called_once()
 
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_process_without_notes(
         self,
         mock_read_notes: MagicMock,
@@ -598,9 +597,9 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
         mock_embed.assert_not_called()
         mock_prs.save.assert_called_once()
 
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_process_multiple_slides(
         self,
         mock_read_notes: MagicMock,
@@ -625,9 +624,9 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mock_embed.call_count, 2)
         mock_prs.save.assert_called_once()
 
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_temp_dir_cleanup_on_success(
         self,
         mock_read_notes: MagicMock,
@@ -648,9 +647,9 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(self.config.temp_audio_dir.exists())
 
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_temp_dir_cleanup_on_failure(
         self,
         mock_read_notes: MagicMock,
@@ -672,9 +671,9 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(self.config.temp_audio_dir.exists())
 
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_tts_failure_skips_embed(
         self,
         mock_read_notes: MagicMock,
@@ -693,9 +692,9 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
         mock_embed.assert_not_called()
 
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_default_temp_dir_uses_system_tempfile(
         self,
         mock_read_notes: MagicMock,
@@ -750,7 +749,7 @@ class TestGetAudioDuration(unittest.TestCase):
             get_audio_duration(nonexistent)
         self.assertIn("音频文件不存在", str(ctx.exception))
 
-    @patch("ppt_speech.audio_duration.TinyTag")
+    @patch("ppt_speech.audio.duration.TinyTag")
     def test_successful(self, mock_tinytag: MagicMock) -> None:
         """测试成功读取音频时长。"""
         mock_tag = MagicMock()
@@ -763,7 +762,7 @@ class TestGetAudioDuration(unittest.TestCase):
         self.assertEqual(get_audio_duration(audio), 3.5)
         mock_tinytag.get.assert_called_once_with(str(audio))
 
-    @patch("ppt_speech.audio_duration.TinyTag")
+    @patch("ppt_speech.audio.duration.TinyTag")
     def test_duration_none_raises(self, mock_tinytag: MagicMock) -> None:
         """测试时长为 None 时抛出 ValueError。"""
         mock_tag = MagicMock()
@@ -777,7 +776,7 @@ class TestGetAudioDuration(unittest.TestCase):
             get_audio_duration(audio)
         self.assertIn("无法获取音频时长", str(ctx.exception))
 
-    @patch("ppt_speech.audio_duration.TinyTag")
+    @patch("ppt_speech.audio.duration.TinyTag")
     def test_tinytag_exception_raises_value_error(
         self, mock_tinytag: MagicMock
     ) -> None:
@@ -863,11 +862,11 @@ class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
         defaults.update(overrides)
         return PTSpeechConfig(**defaults)
 
-    @patch("ppt_speech.notes_tts.set_advance_after_time")
-    @patch("ppt_speech.notes_tts.get_audio_duration", return_value=5.0)
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.set_advance_after_time")
+    @patch("ppt_speech.pipeline.get_audio_duration", return_value=5.0)
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_auto_advance_sets_duration_plus_delay(
         self,
         mock_read_notes: MagicMock,
@@ -891,11 +890,11 @@ class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
         # delay = 5.0 + 2.0 = 7.0
         mock_set_advance.assert_called_once_with(mock_slide, 7.0)
 
-    @patch("ppt_speech.notes_tts.set_advance_after_time")
-    @patch("ppt_speech.notes_tts.get_audio_duration")
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.set_advance_after_time")
+    @patch("ppt_speech.pipeline.get_audio_duration")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_auto_advance_disabled_not_called(
         self,
         mock_read_notes: MagicMock,
@@ -918,14 +917,14 @@ class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
         mock_get_duration.assert_not_called()
         mock_set_advance.assert_not_called()
 
-    @patch("ppt_speech.notes_tts.set_advance_after_time")
+    @patch("ppt_speech.pipeline.set_advance_after_time")
     @patch(
-        "ppt_speech.notes_tts.get_audio_duration",
+        "ppt_speech.pipeline.get_audio_duration",
         side_effect=ValueError("解析失败"),
     )
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_duration_failure_skips_advance_gracefully(
         self,
         mock_read_notes: MagicMock,
@@ -949,11 +948,11 @@ class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
         mock_embed.assert_called_once()  # 嵌入仍正常
         mock_prs.save.assert_called_once()  # 保存仍正常
 
-    @patch("ppt_speech.notes_tts.set_advance_after_time")
-    @patch("ppt_speech.notes_tts.get_audio_duration")
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.read_notes_text")
+    @patch("ppt_speech.pipeline.set_advance_after_time")
+    @patch("ppt_speech.pipeline.get_audio_duration")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.read_notes_text")
     async def test_custom_delay_used(
         self,
         mock_read_notes: MagicMock,
@@ -990,8 +989,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch("ppt_speech.notes_tts.process_slides", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.Presentation")
+    @patch("ppt_speech.pipeline.process_slides", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.Presentation")
     async def test_main_with_custom_config(
         self,
         mock_presentation: MagicMock,
@@ -1013,8 +1012,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         mock_presentation.assert_called_once_with(str(self.input_path))
         mock_process.assert_called_once_with(mock_prs, config)
 
-    @patch("ppt_speech.notes_tts.process_slides", new_callable=AsyncMock)
-    @patch("ppt_speech.notes_tts.Presentation")
+    @patch("ppt_speech.pipeline.process_slides", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.Presentation")
     async def test_main_with_default_config(
         self,
         mock_presentation: MagicMock,
@@ -1087,10 +1086,10 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertIn("en-US", full_name)
         self.assertIn("AriaNeural", full_name)
 
-    @patch("ppt_speech.notes_tts.Presentation")
-    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
-    @patch("ppt_speech.notes_tts.read_notes_text")
-    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.pipeline.Presentation")
+    @patch("ppt_speech.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.pipeline.read_notes_text")
+    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
     async def test_full_pipeline_mock(
         self,
         mock_text_to_mp3: AsyncMock,

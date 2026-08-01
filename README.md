@@ -49,22 +49,25 @@
 ```
 ppt-speech/
 ├── src/
-│   ├── main.py                    # 辅助脚本：拉取并保存可用语音列表到 voices.json
 │   └── ppt_speech/
-│       ├── __init__.py            # 包入口，导出公共 API
+│       ├── __init__.py            # 包入口：包级文档 + 完整公共 API + main()
+│       ├── __main__.py            # 支持 python -m ppt_speech 运行完整流程
 │       ├── config.py              # PTSpeechConfig 配置类与校验逻辑
 │       ├── notes_reader.py        # 从幻灯片提取备注文字
 │       ├── tts_client.py          # Edge TTS 客户端（合成、语音列表、名称规范化）
-│       ├── audio_embedder.py      # 将 MP3 嵌入幻灯片并配置自动播放
-│       ├── audio_duration.py      # 读取音频时长（基于 tinytag，支持 MP3/WAV 等）
+│       ├── audio/                 # 音频处理子包
+│       │   ├── __init__.py        # 子包入口：re-export 音频公共接口
+│       │   ├── duration.py        # 读取音频时长（基于 tinytag，支持 MP3/WAV 等）
+│       │   └── embedder.py        # 将 MP3 嵌入幻灯片并配置自动播放
 │       ├── slide_transition.py    # 设置幻灯片自动翻页时序（修改 OOXML advTm）
-│       └── notes_tts.py           # 顶层编排：speak_ppt_notes / process_slides
+│       ├── pipeline.py            # 顶层编排：speak_ppt_notes / process_slides
+│       └── voices.py              # 辅助工具：刷新可用语音列表到 voices.json
 ├── tests/
 │   └── test_notes_tts.py          # 单元测试与集成测试（unittest）
 ├── data/                          # 输入/输出 PPT 文件目录（已 gitignore）
 │   ├── input.pptx
 │   └── output.pptx
-├── voices.json                    # 可用语音列表缓存（由 src/main.py 生成）
+├── voices.json                    # 可用语音列表缓存（由 python -m ppt_speech.voices 生成）
 ├── pyproject.toml                 # 项目元数据与依赖声明
 ├── uv.lock                        # uv 锁定的依赖版本
 └── .python-version                # Python 版本固定为 3.13
@@ -109,10 +112,10 @@ ppt-speech/
 3. 运行：
 
    ```bash
-   uv run python -m ppt_speech.notes_tts
+   uv run python -m ppt_speech
    ```
 
-   或直接调用包入口：
+   或直接调用控制台入口：
 
    ```bash
    uv run ppt-speech
@@ -222,10 +225,10 @@ asyncio.run(speak_ppt_notes(config))
 
 ## 可用语音
 
-Edge TTS 提供数百种 Neural 语音。运行辅助脚本可拉取完整列表并缓存到 `voices.json`：
+Edge TTS 提供数百种 Neural 语音。运行辅助模块可拉取完整列表并缓存到 `voices.json`：
 
 ```bash
-uv run python src/main.py
+uv run python -m ppt_speech.voices
 ```
 
 `voices.json` 中每项包含 `Name`、`Locale`、`Gender` 等字段，可据此挑选合适的 `voice_name`。常用语音示例：

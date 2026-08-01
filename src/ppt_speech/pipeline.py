@@ -1,4 +1,4 @@
-"""PPT 备注文字转语音主流程模块。
+"""PPT 配音流程编排模块。
 
 本模块是 PPT 语音合成功能的顶层入口，负责按顺序编排以下步骤：
 
@@ -6,7 +6,7 @@
 2. 打开 PPT 演示文稿
 3. 逐页提取备注（使用 :mod:`ppt_speech.notes_reader`）
 4. 调用 TTS 服务生成音频（使用 :mod:`ppt_speech.tts_client`）
-5. 将音频嵌入幻灯片并配置自动播放（使用 :mod:`ppt_speech.audio_embedder`）
+5. 将音频嵌入幻灯片并配置自动播放（使用 :mod:`ppt_speech.audio`）
 6. 按需按「音频时长 + n 秒」设置自动翻页（使用 :mod:`ppt_speech.slide_transition`）
 7. 保存输出 PPT 并清理临时音频文件
 
@@ -14,13 +14,14 @@
 在系统临时目录下创建，避免在当前工作目录留下硬编码路径；处理结束（无论成功
 与否）后由上下文管理器自动清理。
 
-其余子模块均保持独立，可单独导入、单独测试，从而实现
-低耦合、高内聚的模块化设计。
+本模块仅承担「编排」职责，对外暴露 :func:`speak_ppt_notes` 与
+:func:`process_slides` 两个入口；其余子模块的公共符号统一由 :mod:`ppt_speech`
+包根（``ppt_speech/__init__.py``）重新导出，避免在本模块堆砌 re-export
+造成职责混淆。
 """
 
 from __future__ import annotations
 
-import asyncio
 import shutil
 import tempfile
 from contextlib import contextmanager
@@ -30,32 +31,13 @@ from typing import Optional
 from pptx import Presentation
 from pptx.slide import Slide
 
-# 重新导出子模块的公共符号，保持原有 notes_tts 模块的 API 兼容性，
-# 这样外部调用方（包括测试）无需修改导入路径即可继续工作。
-from ppt_speech.audio_duration import get_audio_duration
-from ppt_speech.audio_embedder import (
-    P14_NS,
-    P_NS,
-    _apply_autoplay_timing,
-    embed_audio_autoplay,
-)
+from ppt_speech.audio import embed_audio_autoplay, get_audio_duration
 from ppt_speech.config import PTSpeechConfig
 from ppt_speech.notes_reader import read_notes_text
 from ppt_speech.slide_transition import set_advance_after_time
-from ppt_speech.tts_client import normalize_voice_name, text_to_mp3
+from ppt_speech.tts_client import text_to_mp3
 
-__all__ = [
-    "P_NS",
-    "P14_NS",
-    "PTSpeechConfig",
-    "read_notes_text",
-    "embed_audio_autoplay",
-    "get_audio_duration",
-    "set_advance_after_time",
-    "speak_ppt_notes",
-    "process_slides",
-    "text_to_mp3",
-]
+__all__ = ["speak_ppt_notes", "process_slides"]
 
 
 @contextmanager
@@ -214,14 +196,16 @@ async def speak_ppt_notes(config: Optional[PTSpeechConfig] = None) -> None:
 
     典型用法：
 
-    >>> from ppt_speech import PTSpeechConfig, main
+    >>> import asyncio
+    >>> from pathlib import Path
+    >>> from ppt_speech import PTSpeechConfig, speak_ppt_notes
     >>> config = PTSpeechConfig(
     ...     input_dir=Path("data"),
     ...     output_dir=Path("data"),
     ...     voice_name="zh-CN-XiaoxiaoNeural",
     ...     speech_rate="+0%",
     ... )
-    >>> asyncio.run(main(config))  # doctest: +SKIP
+    >>> asyncio.run(speak_ppt_notes(config))  # doctest: +SKIP
 
     Args:
         config: 配音处理配置；若为 None 则使用默认配置。
@@ -239,7 +223,3 @@ async def speak_ppt_notes(config: Optional[PTSpeechConfig] = None) -> None:
 
     prs = Presentation(str(config.input_path))
     await process_slides(prs, config)
-
-
-if __name__ == "__main__":
-    asyncio.run(speak_ppt_notes())

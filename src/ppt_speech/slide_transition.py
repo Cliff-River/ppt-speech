@@ -18,7 +18,7 @@ from __future__ import annotations
 from lxml import etree
 from pptx.slide import Slide
 
-from ppt_speech.audio_embedder import P_NS
+from ppt_speech.audio import P_NS
 
 
 def set_advance_after_time(slide: Slide, delay_seconds: float) -> None:
