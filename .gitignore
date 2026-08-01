@@ -13,3 +13,8 @@ wheels/
 
 # Data files
 data/
+
+# Generated output
+output.pptx
+
+.trae/
