@@ -176,11 +176,15 @@ class TaskManager:
         # 显式置 PROCESSING，确保 SSE 在首个事件前即见处理中状态。
         await self._redis.hset(key, mapping={"status": TaskStatus.PROCESSING})
 
+        reporter: Optional[ProgressReporter] = None
         try:
             prs = Presentation(str(config.input_path))
             total = len(prs.slides)
             reporter = ProgressReporter(task_id, self._redis, total, input_filename)
             await process_slides(prs, config, on_progress=reporter)
+            # 等待所有进度写入完成，再置终态，避免晚到的 PROCESSING 写入
+            # 把终态 Hash 覆盖回 PROCESSING（导致下载返回 409）。
+            await reporter.wait_pending()
 
             await set_terminal_state(
                 task_id,
@@ -194,6 +198,8 @@ class TaskManager:
                 input_filename=input_filename,
             )
         except Exception as exc:  # noqa: BLE001 — 后台任务需捕获所有异常
+            if reporter is not None:
+                await reporter.wait_pending()
             await set_terminal_state(
                 task_id,
                 self._redis,

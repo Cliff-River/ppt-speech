@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from pathlib import Path
 
 import httpx
-from httpx_sse.aio import EventSource
+from httpx_sse import aconnect_sse
 
 _PPTX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -43,8 +44,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input",
-        required=True,
-        help="输入 pptx 文件路径",
+        default="./data/input.pptx",
+        help="输入 pptx 文件路径（默认 ./data/input.pptx）",
     )
     parser.add_argument(
         "--voice-name",
@@ -131,15 +132,21 @@ async def _upload(client: httpx.AsyncClient, base: str, args) -> dict:
     return resp.json()
 
 
-async def _consume_progress(base: str, progress_url: str) -> bool:
+async def _consume_progress(
+    client: httpx.AsyncClient, base: str, progress_url: str
+) -> bool:
     """订阅 SSE 进度流，返回是否成功完成。"""
     url = f"{base}{progress_url}"
     try:
-        async with EventSource(url, timeout=httpx.Timeout(connect=10.0)) as event_source:
-            async for event in event_source:
+        async with aconnect_sse(
+            client,
+            "GET",
+            url,
+            timeout=httpx.Timeout(connect=10.0, read=None, write=None, pool=None),
+        ) as event_source:
+            async for event in event_source.aiter_sse():
                 if not event.data:
                     continue
-                import json
 
                 try:
                     data = json.loads(event.data)
@@ -191,7 +198,9 @@ async def main_async() -> int:
         print(f"✅ 任务已创建: {task_id}")
         print(f"📊 实时进度:")
 
-        success = await _consume_progress(base, task_info["progress_url"])
+        success = await _consume_progress(
+            client, base, task_info["progress_url"]
+        )
         if not success:
             return 1
 

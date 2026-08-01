@@ -108,6 +108,9 @@ class ProgressReporter:
         self._redis = redis
         self._total_slides = total_slides
         self._input_filename = input_filename
+        # 持有已调度的进度写入 future，供 wait_pending() 在置终态前等待，
+        # 避免晚到的 PROCESSING 写入覆盖终态（COMPLETED/FAILED）。
+        self._pending: set[asyncio.Future] = set()
 
     def __call__(self, event: dict) -> None:
         """pipeline 回调入口：补字段、写 Hash、发 pub/sub（非阻塞调度）。"""
@@ -121,10 +124,23 @@ class ProgressReporter:
         full.update(event)
         # 同步调度异步写入，避免在 pipeline 同步调用点 await。
         try:
-            asyncio.ensure_future(self._persist(full))
+            fut = asyncio.ensure_future(self._persist(full))
+            self._pending.add(fut)
+            fut.add_done_callback(self._pending.discard)
         except RuntimeError:
             # 无运行中事件循环（极端情况下）时降级为直接丢弃，避免崩溃主流程。
             pass
+
+    async def wait_pending(self) -> None:
+        """等待所有已调度的进度写入完成。
+
+        在 :func:`set_terminal_state` 之前调用，确保所有 PROCESSING 状态的
+        Hash 写入与 pub/sub 广播先于终态写入完成，避免晚到的进度事件把
+        终态 Hash 覆盖回 PROCESSING（曾导致客户端收到 COMPLETED 事件后
+        下载仍返回 409 PROCESSING）。
+        """
+        if self._pending:
+            await asyncio.gather(*self._pending, return_exceptions=True)
 
     async def _persist(self, event: dict) -> None:
         """将事件写入 Redis Hash 快照并发布到频道。"""

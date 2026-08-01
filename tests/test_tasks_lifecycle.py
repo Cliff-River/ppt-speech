@@ -22,7 +22,7 @@ from fakeredis import FakeServer
 
 from ppt_speech.server import redis_client
 from ppt_speech.server.config import ServerConfig
-from ppt_speech.server.progress import TaskStatus
+from ppt_speech.server.progress import ProgressReporter, TaskStatus
 from ppt_speech.server.tasks import TaskManager
 
 _VALID_PARAMS = {
@@ -140,6 +140,54 @@ class TestTaskManagerLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(task)
         self.assertEqual(task["status"], TaskStatus.FAILED)
         self.assertIn("合成爆炸", task["error"])
+
+    @patch("ppt_speech.server.tasks.Presentation")
+    @patch("ppt_speech.server.tasks.process_slides", new_callable=AsyncMock)
+    async def test_late_progress_does_not_revert_completed(
+        self, mock_process: AsyncMock, mock_presentation: MagicMock
+    ) -> None:
+        """回归：晚到的进度写入不应把 COMPLETED 覆盖回 PROCESSING。
+
+        reporter 经 ``ensure_future`` 异步写 Redis；若 ``run_task`` 未在置终态前
+        ``wait_pending()``，晚到的 PROCESSING 写入会覆盖终态 Hash，导致客户端
+        收到 COMPLETED 事件后下载仍返回 409 PROCESSING。此处人为延迟 ``_persist``
+        放大该竞态，断言终态稳定为 COMPLETED。
+        """
+        mock_prs = MagicMock()
+        mock_prs.slides = [MagicMock(), MagicMock()]
+        mock_presentation.return_value = mock_prs
+
+        async def fake_process(prs, config, on_progress=None) -> None:
+            if on_progress:
+                on_progress(
+                    {
+                        "stage": "SYNTHESIZING",
+                        "slide_idx": 1,
+                        "percent": 50.0,
+                        "message": "合成中",
+                    }
+                )
+
+        mock_process.side_effect = fake_process
+
+        # 让 _persist 延迟执行，放大「晚到写入覆盖终态」的竞态窗口。
+        orig_persist = ProgressReporter._persist
+
+        async def slow_persist(self_reporter, event: dict) -> None:
+            await asyncio.sleep(0.05)
+            await orig_persist(self_reporter, event)
+
+        with patch.object(ProgressReporter, "_persist", slow_persist):
+            task_id = await self.manager.create_task(
+                b"fake pptx", "input.pptx", _VALID_PARAMS
+            )
+            # 等足够久，确保后台任务与任何晚到的 _persist 都已执行完毕。
+            await asyncio.sleep(0.3)
+
+        task = await self.manager.get_task(task_id)
+        self.assertIsNotNone(task)
+        self.assertEqual(task["status"], TaskStatus.COMPLETED)
+        self.assertEqual(task["result_ready"], "true")
 
     @patch("ppt_speech.server.tasks.Presentation")
     @patch("ppt_speech.server.tasks.process_slides", new_callable=AsyncMock)
