@@ -1,0 +1,126 @@
+### ppt-speech-server 接口测试用例
+### 使用 VS Code REST Client / JetBrains HTTP Client 运行。
+### 前置：启动服务 → uv run ppt-speech-server
+### 变量
+@host = http://127.0.0.1:8000
+@taskId = 在此粘贴上传返回的 task_id
+
+
+### 1. 健康检查（应 200，redis=true）
+GET {{host}}/api/v1/health
+Accept: application/json
+
+
+### 2. 正常上传（应 202，返回 task_id / progress_url / result_url）
+###    将返回的 task_id 填入上方 @taskId 变量
+POST {{host}}/api/v1/tasks
+Content-Type: multipart/form-data; boundary=----pptboundary
+
+------pptboundary
+Content-Disposition: form-data; name="file"; filename="input.pptx"
+Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation
+
+< ./data/input.pptx
+------pptboundary
+Content-Disposition: form-data; name="voice_name"
+
+zh-CN-XiaoxiaoNeural
+------pptboundary
+Content-Disposition: form-data; name="speech_rate"
+
++0%
+------pptboundary
+Content-Disposition: form-data; name="auto_advance"
+
+true
+------pptboundary
+Content-Disposition: form-data; name="auto_advance_delay"
+
+2.0
+------pptboundary--
+
+
+### 3. SSE 实时进度流（应 200，text/event-stream）
+###    替换 {{taskId}} 为实际值；REST Client 中 SSE 为只读流式输出
+GET {{host}}/api/v1/tasks/{{taskId}}/progress
+Accept: text/event-stream
+
+
+### 4. 查询任务状态（应 200，返回状态快照）
+GET {{host}}/api/v1/tasks/{{taskId}}
+Accept: application/json
+
+
+### 5. 列出全部任务（应 200，返回 tasks 数组）
+GET {{host}}/api/v1/tasks
+Accept: application/json
+
+
+### 6. 下载处理结果（处理完成后应 200，返回 pptx 二进制）
+GET {{host}}/api/v1/tasks/{{taskId}}/result
+Accept: application/vnd.openxmlformats-officedocument.presentationml.presentation
+
+
+### ---------- 边界与错误用例 ----------
+
+
+### 7. 缺文件上传（应 400，code=missing_file）
+POST {{host}}/api/v1/tasks
+Content-Type: multipart/form-data; boundary=----pptboundary
+
+------pptboundary--
+
+
+### 8. 非法 voice_name（应 422，code=invalid_config）
+POST {{host}}/api/v1/tasks
+Content-Type: multipart/form-data; boundary=----pptboundary
+
+------pptboundary
+Content-Disposition: form-data; name="file"; filename="input.pptx"
+Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation
+
+< ./data/input.pptx
+------pptboundary
+Content-Disposition: form-data; name="voice_name"
+
+not-a-valid-voice
+------pptboundary--
+
+
+### 9. 非法 speech_rate（应 422，code=invalid_config）
+POST {{host}}/api/v1/tasks
+Content-Type: multipart/form-data; boundary=----pptboundary
+
+------pptboundary
+Content-Disposition: form-data; name="file"; filename="input.pptx"
+Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation
+
+< ./data/input.pptx
+------pptboundary
+Content-Disposition: form-data; name="speech_rate"
+
+invalid
+------pptboundary--
+
+
+### 10. 非法文件类型（应 422，code=invalid_file_type）
+POST {{host}}/api/v1/tasks
+Content-Type: multipart/form-data; boundary=----pptboundary
+
+------pptboundary
+Content-Disposition: form-data; name="file"; filename="notes.txt"
+Content-Type: text/plain
+
+< ./README.md
+------pptboundary--
+
+
+### 11. 不存在的任务（应 404，code=not_found）
+GET {{host}}/api/v1/tasks/00000000-0000-0000-0000-000000000000
+Accept: application/json
+
+
+### 12. 结果未就绪（任务处理中查询，应 409，code=not_ready）
+###    需在上传后立即查询未完成的任务
+GET {{host}}/api/v1/tasks/{{taskId}}/result
+Accept: application/json

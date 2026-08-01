@@ -21,6 +21,7 @@
 - [环境要求](#环境要求)
 - [安装](#安装)
 - [使用说明](#使用说明)
+- [服务端架构（HTTP + SSE）](#服务端架构http--sse)
 - [配置参数](#配置参数)
 - [可用语音](#可用语音)
 - [开发与测试](#开发与测试)
@@ -43,6 +44,8 @@
 | 配置校验 | 启动前校验语音名称、语速格式及输入文件存在性，快速失败 |
 | 临时文件清理 | 处理完成（无论成功与否）后自动清理临时音频目录 |
 | 模块化 | 读取、合成、嵌入、编排各层解耦，可单独复用 |
+| 客户端-服务端架构 | 基于 FastAPI 的 HTTP 服务，支持文件上传、SSE 实时进度反馈与结果下载 |
+| Redis 状态存储 | 任务/进度状态经 Redis Hash + pub/sub 管理，支持 SSE 断线重连 |
 
 ## 项目结构
 
@@ -60,15 +63,33 @@ ppt-speech/
 │       │   ├── duration.py        # 读取音频时长（基于 tinytag，支持 MP3/WAV 等）
 │       │   └── embedder.py        # 将 MP3 嵌入幻灯片并配置自动播放
 │       ├── slide_transition.py    # 设置幻灯片自动翻页时序（修改 OOXML advTm）
-│       ├── pipeline.py            # 顶层编排：speak_ppt_notes / process_slides
-│       └── voices.py              # 辅助工具：刷新可用语音列表到 voices.json
-├── tests/
-│   └── test_notes_tts.py          # 单元测试与集成测试（unittest）
+│       ├── pipeline.py            # 顶层编排：speak_ppt_notes / process_slides（支持 on_progress 回调）
+│       ├── voices.py              # 辅助工具：刷新可用语音列表到 voices.json
+│       └── server/                # 服务端子包（FastAPI + Redis + SSE，需 [server] extra）
+│           ├── __init__.py        # 暴露 main() 控制台入口
+│           ├── __main__.py        # 支持 python -m ppt_speech.server
+│           ├── config.py          # ServerConfig（env 读取）
+│           ├── redis_client.py    # redis.asyncio 单例 + 键命名 + ping
+│           ├── progress.py        # ProgressReporter 回调实现 + 事件 schema
+│           ├── tasks.py           # TaskManager：任务生命周期 + 后台 worker
+│           ├── sse.py             # event_stream SSE 生成器
+│           ├── app.py             # FastAPI 路由 + lifespan
+│           └── cleanup.py         # 磁盘清理协程
+├── tests/                         # 单元/集成测试（unittest）
+│   ├── test_notes_tts.py          # 核心库测试
+│   ├── test_progress_callback.py  # pipeline 进度回调测试
+│   ├── test_redis_client.py       # Redis 客户端 + ProgressReporter 测试
+│   ├── test_sse.py                # SSE event_stream 测试
+│   ├── test_tasks_lifecycle.py    # TaskManager 生命周期测试
+│   └── test_server_app.py         # FastAPI 路由测试
+├── docs/                          # 架构/API/部署/缓存/客户端/测试文档
 ├── data/                          # 输入/输出 PPT 文件目录（已 gitignore）
 │   ├── input.pptx
 │   └── output.pptx
+├── client.py                      # 示例客户端（上传 + SSE + 下载，需 [client] extra）
+├── test.http                      # REST Client 测试用例
 ├── voices.json                    # 可用语音列表缓存（由 python -m ppt_speech.voices 生成）
-├── pyproject.toml                 # 项目元数据与依赖声明
+├── pyproject.toml                 # 项目元数据与依赖声明（含 server/client/test extras）
 ├── uv.lock                        # uv 锁定的依赖版本
 └── .python-version                # Python 版本固定为 3.13
 ```
@@ -78,6 +99,7 @@ ppt-speech/
 - **Python** ≥ 3.13
 - **uv**（推荐的包管理器，用于安装与运行）
 - 可访问互联网的 Edge TTS 服务（合成时需要在线）
+- **Redis**（仅服务端模式需要，默认 `192.168.79.160:6379`）
 
 ## 安装
 
@@ -101,7 +123,29 @@ ppt-speech/
    uv sync
    ```
 
-   `uv sync` 会自动根据 `uv.lock` 创建虚拟环境并安装 `edge-tts`、`python-pptx`、`tinytag` 等依赖。
+   `uv sync` 会自动根据 `uv.lock` 创建虚拟环境并安装 `edge-tts`、`python-pptx`、`tinytag` 等核心依赖。
+
+3. 按需安装可选依赖组（服务端 / 客户端 / 测试）：
+
+   ```bash
+   # 服务端模式（FastAPI + Redis + SSE）
+   uv pip install -e ".[server]"
+
+   # 客户端脚本（httpx + httpx-sse）
+   uv pip install -e ".[client]"
+
+   # 测试（coverage + fakeredis）
+   uv pip install -e ".[test]"
+
+   # 或一次性安装全部
+   uv pip install -e ".[server,client,test]"
+   ```
+
+   | 组 | 包 | 用途 |
+   | --- | --- | --- |
+   | `server` | fastapi, uvicorn[standard], redis, python-multipart | 运行 HTTP 服务 |
+   | `client` | httpx, httpx-sse | 运行 `client.py` |
+   | `test` | coverage, httpx, fakeredis | 运行测试 |
 
 ## 使用说明
 
@@ -167,6 +211,46 @@ asyncio.run(text_to_mp3(
     speech_rate="-10%",
 ))
 ```
+
+## 服务端架构（HTTP + SSE）
+
+除命令行/库外，项目提供基于 FastAPI 的客户端-服务端架构：客户端上传 `.pptx`，
+服务端后台处理并经 SSE 实时回传进度（阶段/百分比/ETA），完成后返回带配音的结果。
+Redis 作为任务/进度状态存储 + pub/sub 事件通道，支持 SSE 断线重连。
+
+> 详细设计见 [docs/architecture.md](docs/architecture.md)，API 见 [docs/api.md](docs/api.md)，
+> 部署见 [docs/deployment.md](docs/deployment.md)，缓存策略见 [docs/caching-strategy.md](docs/caching-strategy.md)。
+
+### 快速开始
+
+```bash
+# 1. 安装服务端 + 客户端依赖
+uv pip install -e ".[server,client]"
+
+# 2. 启动服务（确保 Redis 192.168.79.160:6379 可达）
+uv run ppt-speech-server
+
+# 3. 另起终端，运行客户端（实时查看进度 + 下载结果）
+uv run python client.py \
+  --server http://127.0.0.1:8000 \
+  --input ./data/input.pptx \
+  --voice-name zh-CN-XiaoxiaoNeural \
+  --auto-advance --output ./out.pptx
+```
+
+### 主要端点
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/v1/tasks` | 上传 pptx + 配置参数，返回 task_id（202） |
+| GET | `/api/v1/tasks/{id}/progress` | SSE 实时进度流 |
+| GET | `/api/v1/tasks/{id}` | 查询任务状态 |
+| GET | `/api/v1/tasks/{id}/result` | 下载结果 pptx |
+| GET | `/api/v1/health` | 健康检查（含 Redis 连通性） |
+
+客户端可传 `voice_name`、`speech_rate`、`auto_advance`、`auto_advance_delay` 参数。
+服务启动后访问 `/docs` 查看交互式 API 文档。手动测试用例见 [`test.http`](test.http)，
+客户端使用详见 [docs/client-usage.md](docs/client-usage.md)。
 
 ## 配置参数
 
@@ -245,19 +329,22 @@ uv run python -m ppt_speech.voices
 
 ### 运行测试
 
-测试基于 Python 标准库 `unittest`，覆盖配置校验、语音名称规范化、备注读取、TTS 合成、音频嵌入、音频时长提取、幻灯片自动翻页时序、流程编排及完整流水线（mock）：
+测试基于 Python 标准库 `unittest`，覆盖配置校验、语音名称规范化、备注读取、TTS 合成、音频嵌入、音频时长提取、幻灯片自动翻页时序、流程编排、完整流水线（mock），以及服务端的进度回调、Redis 状态存储、SSE 事件流、任务生命周期与 FastAPI 路由：
 
 ```bash
-uv run --with coverage --group test coverage run -m unittest discover -s tests -v
+uv pip install -e ".[test]"
+uv run coverage run -m unittest discover -s tests -v
 ```
 
 ### 查看覆盖率
 
 ```bash
-uv run --with coverage --group test coverage report -m
+uv run coverage report -m
 ```
 
-测试不依赖真实网络（TTS 与 PPT 保存均通过 mock 隔离），可在离线环境下运行。
+测试不依赖真实网络与真实 Redis（TTS、PPT 保存、Redis 均通过 mock / fakeredis 隔离），
+可在离线环境下运行。当前共 97 个测试，覆盖率约 94%。测试说明详见
+[docs/testing.md](docs/testing.md)。
 
 ### 代码风格约定
 
