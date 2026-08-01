@@ -33,12 +33,11 @@ from pptx import Presentation
 from ppt_speech.audio_embedder import (
     P14_NS,
     P_NS,
-    _apply_autoplay_timing,
     embed_audio_autoplay,
 )
 from ppt_speech.config import PTSpeechConfig
 from ppt_speech.notes_reader import read_notes_text
-from ppt_speech.tts_client import normalize_voice_name, text_to_mp3
+from ppt_speech.tts_client import  text_to_mp3
 
 __all__ = [
     "P_NS",
