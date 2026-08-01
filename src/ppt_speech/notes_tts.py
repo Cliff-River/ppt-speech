@@ -7,7 +7,8 @@
 3. 逐页提取备注（使用 :mod:`ppt_speech.notes_reader`）
 4. 调用 TTS 服务生成音频（使用 :mod:`ppt_speech.tts_client`）
 5. 将音频嵌入幻灯片并配置自动播放（使用 :mod:`ppt_speech.audio_embedder`）
-6. 保存输出 PPT 并清理临时音频文件
+6. 按需按「音频时长 + n 秒」设置自动翻页（使用 :mod:`ppt_speech.slide_transition`）
+7. 保存输出 PPT 并清理临时音频文件
 
 中间音频文件统一存放在临时目录中：默认通过 :func:`tempfile.TemporaryDirectory`
 在系统临时目录下创建，避免在当前工作目录留下硬编码路径；处理结束（无论成功
@@ -27,17 +28,21 @@ from pathlib import Path
 from typing import Optional
 
 from pptx import Presentation
+from pptx.slide import Slide
 
 # 重新导出子模块的公共符号，保持原有 notes_tts 模块的 API 兼容性，
 # 这样外部调用方（包括测试）无需修改导入路径即可继续工作。
+from ppt_speech.audio_duration import get_audio_duration
 from ppt_speech.audio_embedder import (
     P14_NS,
     P_NS,
+    _apply_autoplay_timing,
     embed_audio_autoplay,
 )
 from ppt_speech.config import PTSpeechConfig
 from ppt_speech.notes_reader import read_notes_text
-from ppt_speech.tts_client import  text_to_mp3
+from ppt_speech.slide_transition import set_advance_after_time
+from ppt_speech.tts_client import normalize_voice_name, text_to_mp3
 
 __all__ = [
     "P_NS",
@@ -45,6 +50,8 @@ __all__ = [
     "PTSpeechConfig",
     "read_notes_text",
     "embed_audio_autoplay",
+    "get_audio_duration",
+    "set_advance_after_time",
     "speak_ppt_notes",
     "process_slides",
     "text_to_mp3",
@@ -103,6 +110,44 @@ def _temp_audio_workspace(config: PTSpeechConfig):
             yield Path(workspace.name)
 
 
+def _apply_auto_advance(
+    slide: Slide,
+    audio_file: Path,
+    config: PTSpeechConfig,
+    idx: int,
+) -> None:
+    """读取音频时长并为幻灯片设置自动翻页时间。
+
+    停留时间 = 音频时长 + ``config.auto_advance_delay``。
+
+    当音频文件缺失或时长解析失败时打印警告并跳过该页自动翻页，
+    不影响整体处理流程（优雅降级）。
+
+    Args:
+        slide: 已嵌入音频的目标幻灯片。
+        audio_file: 对应的音频文件路径。
+        config: 配音处理配置（读取 auto_advance_delay）。
+        idx: 幻灯片页码（用于日志输出）。
+    """
+    try:
+        duration = get_audio_duration(audio_file)
+    except (OSError, ValueError) as exc:
+        print(f"   ⚠️ 第{idx}页无法读取音频时长，跳过自动翻页：{exc}")
+        return
+
+    delay = duration + config.auto_advance_delay
+    try:
+        set_advance_after_time(slide, delay)
+    except (OSError, ValueError) as exc:
+        print(f"   ⚠️ 第{idx}页无法设置自动翻页：{exc}")
+        return
+
+    print(
+        f"   ⏱️ 第{idx}页自动翻页：音频 {duration:.1f}s "
+        f"+ 缓冲 {config.auto_advance_delay}s = {delay:.1f}s"
+    )
+
+
 async def process_slides(
     prs: Presentation,
     config: PTSpeechConfig,
@@ -111,7 +156,8 @@ async def process_slides(
 
     按顺序遍历每张幻灯片：
     - 无备注：打印提示并跳过。
-    - 有备注：调用 TTS 合成音频，成功后嵌入到幻灯片。
+    - 有备注：调用 TTS 合成音频，成功后嵌入到幻灯片；若启用
+      ``auto_advance``，则按「音频时长 + n 秒」设置该页自动翻页。
     处理完成后保存输出文件。
 
     中间音频文件存放在临时目录中，由 :func:`_temp_audio_workspace` 统一管理
@@ -154,6 +200,9 @@ async def process_slides(
                     icon_offset=config.audio_icon_offset,
                     icon_size=config.audio_icon_size,
                 )
+
+                if config.auto_advance:
+                    _apply_auto_advance(slide, audio_file, config, idx)
 
         config.output_dir.mkdir(parents=True, exist_ok=True)
         prs.save(str(config.output_path))

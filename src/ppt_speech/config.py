@@ -29,6 +29,9 @@ class PTSpeechConfig:
             （tempfile）创建，处理完成后自动清理。
         audio_icon_offset: 音频图标在画布上的偏移英寸数，负值可实现视觉隐藏。
         audio_icon_size: 音频图标尺寸（英寸）。
+        auto_advance: 是否启用「音频播放完成后自动翻页」功能。
+        auto_advance_delay: 自动翻页额外延迟秒数（n），在音频时长基础上增加；
+            默认 2.0 秒。
     """
 
     input_dir: Path = field(default_factory=lambda: Path("data"))
@@ -40,6 +43,8 @@ class PTSpeechConfig:
     temp_audio_dir: Path | None = None
     audio_icon_offset: float = -2.0
     audio_icon_size: float = 1.0
+    auto_advance: bool = True
+    auto_advance_delay: float = 2.0
 
     @property
     def input_path(self) -> Path:
@@ -74,4 +79,8 @@ class PTSpeechConfig:
         if not self.input_path.exists():
             raise FileNotFoundError(
                 f"输入 PPT 文件不存在: {self.input_path}"
+            )
+        if self.auto_advance and self.auto_advance_delay < 0:
+            raise ValueError(
+                f"自动翻页延迟时间不能为负数: {self.auto_advance_delay}"
             )

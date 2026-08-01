@@ -34,6 +34,8 @@ from ppt_speech.notes_tts import (
     process_slides,
     text_to_mp3,
 )
+from ppt_speech.audio_duration import get_audio_duration
+from ppt_speech.slide_transition import _set_adv_tm, set_advance_after_time
 
 
 NSMAP = {"p": P_NS, "p14": P14_NS}
@@ -53,6 +55,8 @@ class TestPTSpeechConfig(unittest.TestCase):
         self.assertEqual(config.speech_rate, "+0%")
         self.assertEqual(config.audio_icon_offset, -2.0)
         self.assertEqual(config.audio_icon_size, 1.0)
+        self.assertTrue(config.auto_advance)
+        self.assertEqual(config.auto_advance_delay, 2.0)
 
     def test_custom_creation(self) -> None:
         """测试自定义配置创建。"""
@@ -123,6 +127,16 @@ class TestPTSpeechConfig(unittest.TestCase):
         for rate in ("+0%", "-0%", "+100%", "-100%", "+999%"):
             config = PTSpeechConfig(speech_rate=rate)
             config.validate()
+
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_validate_negative_auto_advance_delay(
+        self, mock_exists: MagicMock
+    ) -> None:
+        """测试自动翻页延迟为负数时验证失败。"""
+        config = PTSpeechConfig(auto_advance=True, auto_advance_delay=-1.0)
+        with self.assertRaises(ValueError) as ctx:
+            config.validate()
+        self.assertIn("自动翻页延迟时间不能为负数", str(ctx.exception))
 
 
 class TestNormalizeVoiceName(unittest.TestCase):
@@ -527,6 +541,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
             input_filename="input.pptx",
             output_filename="output.pptx",
             temp_audio_dir=self.temp_dir / "temp_audio",
+            auto_advance=False,
         )
 
     def tearDown(self) -> None:
@@ -697,6 +712,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
             output_dir=self.temp_dir,
             input_filename="input.pptx",
             output_filename="output.pptx",
+            auto_advance=False,
         )
 
         mock_slide = MagicMock()
@@ -715,6 +731,251 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
         )
         # 处理完成后该临时目录应已被上下文管理器自动清理
         self.assertFalse(used_dir.exists())
+
+
+class TestGetAudioDuration(unittest.TestCase):
+    """get_audio_duration 函数测试。"""
+
+    def setUp(self) -> None:
+        self.temp_dir = Path(tempfile.mkdtemp())
+
+    def tearDown(self) -> None:
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_file_not_found(self) -> None:
+        """测试音频文件不存在异常。"""
+        nonexistent = self.temp_dir / "no.mp3"
+        with self.assertRaises(FileNotFoundError) as ctx:
+            get_audio_duration(nonexistent)
+        self.assertIn("音频文件不存在", str(ctx.exception))
+
+    @patch("ppt_speech.audio_duration.TinyTag")
+    def test_successful(self, mock_tinytag: MagicMock) -> None:
+        """测试成功读取音频时长。"""
+        mock_tag = MagicMock()
+        mock_tag.duration = 3.5
+        mock_tinytag.get.return_value = mock_tag
+
+        audio = self.temp_dir / "a.mp3"
+        audio.write_bytes(b"fake")
+
+        self.assertEqual(get_audio_duration(audio), 3.5)
+        mock_tinytag.get.assert_called_once_with(str(audio))
+
+    @patch("ppt_speech.audio_duration.TinyTag")
+    def test_duration_none_raises(self, mock_tinytag: MagicMock) -> None:
+        """测试时长为 None 时抛出 ValueError。"""
+        mock_tag = MagicMock()
+        mock_tag.duration = None
+        mock_tinytag.get.return_value = mock_tag
+
+        audio = self.temp_dir / "a.mp3"
+        audio.write_bytes(b"fake")
+
+        with self.assertRaises(ValueError) as ctx:
+            get_audio_duration(audio)
+        self.assertIn("无法获取音频时长", str(ctx.exception))
+
+    @patch("ppt_speech.audio_duration.TinyTag")
+    def test_tinytag_exception_raises_value_error(
+        self, mock_tinytag: MagicMock
+    ) -> None:
+        """测试 tinytag 抛出异常时转换为 ValueError。"""
+        mock_tinytag.get.side_effect = Exception("解析错误")
+
+        audio = self.temp_dir / "a.mp3"
+        audio.write_bytes(b"fake")
+
+        with self.assertRaises(ValueError) as ctx:
+            get_audio_duration(audio)
+        self.assertIn("无法解析音频文件", str(ctx.exception))
+
+
+class TestSetAdvanceAfterTime(unittest.TestCase):
+    """set_advance_after_time / _set_adv_tm 测试。"""
+
+    def test_sets_advtm_and_inserts_before_timing(self) -> None:
+        """测试写入 advTm 且位于 p:timing 之前（schema 顺序）。"""
+        xml = f'<p:sld xmlns:p="{P_NS}"><p:cSld/><p:timing/></p:sld>'
+        el = lxml_etree.fromstring(xml.encode())
+
+        _set_adv_tm(el, 7000)
+
+        trans = el.find(f"{{{P_NS}}}transition")
+        self.assertIsNotNone(trans)
+        self.assertEqual(trans.get("advTm"), "7000")
+        children = list(el)
+        self.assertEqual(children[1].tag, f"{{{P_NS}}}transition")
+        self.assertEqual(children[2].tag, f"{{{P_NS}}}timing")
+
+    def test_appends_when_no_timing(self) -> None:
+        """测试无 timing/extLst 时追加到末尾。"""
+        xml = f'<p:sld xmlns:p="{P_NS}"><p:cSld/></p:sld>'
+        el = lxml_etree.fromstring(xml.encode())
+
+        _set_adv_tm(el, 1000)
+
+        trans = el.find(f"{{{P_NS}}}transition")
+        self.assertIsNotNone(trans)
+        self.assertEqual(trans.get("advTm"), "1000")
+
+    def test_preserves_existing_transition_effects(self) -> None:
+        """测试已有切换效果时仅更新 advTm，保留子元素。"""
+        xml = (
+            f'<p:sld xmlns:p="{P_NS}"><p:cSld/>'
+            f'<p:transition><p:fade/></p:transition><p:timing/></p:sld>'
+        )
+        el = lxml_etree.fromstring(xml.encode())
+
+        _set_adv_tm(el, 3000)
+
+        transitions = el.findall(f"{{{P_NS}}}transition")
+        self.assertEqual(len(transitions), 1)
+        self.assertEqual(transitions[0].get("advTm"), "3000")
+        self.assertIsNotNone(transitions[0].find(f"{{{P_NS}}}fade"))
+
+    def test_negative_delay_raises(self) -> None:
+        """测试负延迟抛出 ValueError。"""
+        with self.assertRaises(ValueError):
+            set_advance_after_time(MagicMock(), -1.0)
+
+
+class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
+    """自动翻页集成测试。"""
+
+    def setUp(self) -> None:
+        self.temp_dir = Path(tempfile.mkdtemp())
+
+    def tearDown(self) -> None:
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _make_config(self, **overrides) -> PTSpeechConfig:
+        defaults = dict(
+            input_dir=self.temp_dir,
+            output_dir=self.temp_dir,
+            input_filename="input.pptx",
+            output_filename="output.pptx",
+            auto_advance=True,
+            auto_advance_delay=2.0,
+        )
+        defaults.update(overrides)
+        return PTSpeechConfig(**defaults)
+
+    @patch("ppt_speech.notes_tts.set_advance_after_time")
+    @patch("ppt_speech.notes_tts.get_audio_duration", return_value=5.0)
+    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
+    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.notes_tts.read_notes_text")
+    async def test_auto_advance_sets_duration_plus_delay(
+        self,
+        mock_read_notes: MagicMock,
+        mock_text_to_mp3: AsyncMock,
+        mock_embed: MagicMock,
+        mock_get_duration: MagicMock,
+        mock_set_advance: MagicMock,
+    ) -> None:
+        """开启 auto_advance 时按「音频时长 + n」设置翻页时间。"""
+        mock_read_notes.return_value = "备注"
+        mock_text_to_mp3.return_value = True
+
+        config = self._make_config()
+        mock_slide = MagicMock()
+        mock_prs = MagicMock()
+        mock_prs.slides = [mock_slide]
+
+        await process_slides(mock_prs, config)
+
+        mock_get_duration.assert_called_once()
+        # delay = 5.0 + 2.0 = 7.0
+        mock_set_advance.assert_called_once_with(mock_slide, 7.0)
+
+    @patch("ppt_speech.notes_tts.set_advance_after_time")
+    @patch("ppt_speech.notes_tts.get_audio_duration")
+    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
+    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.notes_tts.read_notes_text")
+    async def test_auto_advance_disabled_not_called(
+        self,
+        mock_read_notes: MagicMock,
+        mock_text_to_mp3: AsyncMock,
+        mock_embed: MagicMock,
+        mock_get_duration: MagicMock,
+        mock_set_advance: MagicMock,
+    ) -> None:
+        """关闭 auto_advance 时不应调用翻页相关函数。"""
+        mock_read_notes.return_value = "备注"
+        mock_text_to_mp3.return_value = True
+
+        config = self._make_config(auto_advance=False)
+        mock_slide = MagicMock()
+        mock_prs = MagicMock()
+        mock_prs.slides = [mock_slide]
+
+        await process_slides(mock_prs, config)
+
+        mock_get_duration.assert_not_called()
+        mock_set_advance.assert_not_called()
+
+    @patch("ppt_speech.notes_tts.set_advance_after_time")
+    @patch(
+        "ppt_speech.notes_tts.get_audio_duration",
+        side_effect=ValueError("解析失败"),
+    )
+    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
+    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.notes_tts.read_notes_text")
+    async def test_duration_failure_skips_advance_gracefully(
+        self,
+        mock_read_notes: MagicMock,
+        mock_text_to_mp3: AsyncMock,
+        mock_embed: MagicMock,
+        mock_get_duration: MagicMock,
+        mock_set_advance: MagicMock,
+    ) -> None:
+        """音频时长解析失败时优雅跳过，不影响整体流程。"""
+        mock_read_notes.return_value = "备注"
+        mock_text_to_mp3.return_value = True
+
+        config = self._make_config()
+        mock_slide = MagicMock()
+        mock_prs = MagicMock()
+        mock_prs.slides = [mock_slide]
+
+        await process_slides(mock_prs, config)  # 不应抛出异常
+
+        mock_set_advance.assert_not_called()
+        mock_embed.assert_called_once()  # 嵌入仍正常
+        mock_prs.save.assert_called_once()  # 保存仍正常
+
+    @patch("ppt_speech.notes_tts.set_advance_after_time")
+    @patch("ppt_speech.notes_tts.get_audio_duration")
+    @patch("ppt_speech.notes_tts.embed_audio_autoplay")
+    @patch("ppt_speech.notes_tts.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.notes_tts.read_notes_text")
+    async def test_custom_delay_used(
+        self,
+        mock_read_notes: MagicMock,
+        mock_text_to_mp3: AsyncMock,
+        mock_embed: MagicMock,
+        mock_get_duration: MagicMock,
+        mock_set_advance: MagicMock,
+    ) -> None:
+        """自定义 n 值应体现在翻页时间中。"""
+        mock_read_notes.return_value = "备注"
+        mock_text_to_mp3.return_value = True
+        mock_get_duration.return_value = 10.0
+
+        config = self._make_config(auto_advance_delay=0.5)
+        mock_slide = MagicMock()
+        mock_prs = MagicMock()
+        mock_prs.slides = [mock_slide]
+
+        await process_slides(mock_prs, config)
+
+        # delay = 10.0 + 0.5 = 10.5
+        mock_set_advance.assert_called_once_with(mock_slide, 10.5)
 
 
 class TestMain(unittest.IsolatedAsyncioTestCase):
@@ -855,6 +1116,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
             input_filename="input.pptx",
             output_filename="output.pptx",
             temp_audio_dir=self.temp_dir / "temp_audio",
+            auto_advance=False,
         )
 
         await speak_ppt_notes(config)
