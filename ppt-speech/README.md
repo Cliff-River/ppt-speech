@@ -1,6 +1,6 @@
 # ppt-speech
 
-> 将 PowerPoint 幻灯片备注自动转换为语音，并嵌入到演示文稿中实现翻页自动播放的命令行工具。
+> 一套**以服务端为核心**的 PowerPoint 自动配音平台：在可复用 Python 库与命令行工具之上，主打基于 FastAPI 的 HTTP 服务——上传 `.pptx` 后后台自动将每页备注经 Edge TTS（无需 API Key）合成语音、嵌入幻灯片并按音频时长设置自动翻页，全程经 SSE 实时回传阶段/百分比/ETA 进度，完成后返回带配音的结果文件。底层以 Redis（Hash 快照 + pub/sub 事件）管理任务与进度状态并支持 SSE 断线重连，全部运行参数经环境变量注入、便于容器化部署，对外提供标准 REST + SSE 接口，适用于网课录制、自动讲解、无障碍演示与批量配音等场景的服务端集成。
 
 `ppt-speech` 读取 `.pptx` 文件中每张幻灯片的备注文字，调用 Microsoft Edge 在线文本转语音（TTS）服务生成 MP3 音频，再将音频嵌入对应幻灯片并修改底层 XML 时序，使其在幻灯片进入时自动播放。同时根据每页音频的精确时长，按「音频时长 + n 秒」设置自动切换时间，实现音频播放完成后自动翻页。最终输出一份“自带旁白、自动推进”的演示文稿，适合用于录制网课、自动讲解、无障碍演示等场景。
 
@@ -10,7 +10,10 @@
 - ⏭️ 音频播放完成后**自动翻页**（音频时长 + 可配置缓冲秒数）
 - 🌍 支持多语言/多语音（中文、英文、粤语等数百种 Neural 语音）
 - ⚡ 支持语速调节（`+50%` / `-30%` 等）
-- 🧩 模块化设计，各子模块可独立导入与测试
+- 🧩 模块化设计，核心库零外部服务依赖，各子模块可独立导入与测试
+- 🖥️ 可选 FastAPI 服务端：文件上传 + SSE 实时进度 + 结果下载（Redis 状态存储）
+
+当前版本：`0.1.0`
 
 ---
 
@@ -20,11 +23,13 @@
 - [项目结构](#项目结构)
 - [环境要求](#环境要求)
 - [安装](#安装)
+- [依赖项](#依赖项)
 - [使用说明](#使用说明)
 - [服务端架构（HTTP + SSE）](#服务端架构http--sse)
 - [配置参数](#配置参数)
 - [可用语音](#可用语音)
 - [开发与测试](#开发与测试)
+- [常见问题与已知问题](#常见问题与已知问题)
 - [贡献指南](#贡献指南)
 - [许可证](#许可证)
 - [联系方式](#联系方式)
@@ -43,7 +48,8 @@
 | 语速调节 | 支持 `[+-]数字%` 格式的语速调整 |
 | 配置校验 | 启动前校验语音名称、语速格式及输入文件存在性，快速失败 |
 | 临时文件清理 | 处理完成（无论成功与否）后自动清理临时音频目录 |
-| 模块化 | 读取、合成、嵌入、编排各层解耦，可单独复用 |
+| 优雅降级 | 某页音频缺失或时长解析失败时仅跳过该页自动翻页，不影响整体流程 |
+| 模块化 | 读取、合成、嵌入、编排各层解耦，可单独复用；核心库不依赖 fastapi/redis |
 | 客户端-服务端架构 | 基于 FastAPI 的 HTTP 服务，支持文件上传、SSE 实时进度反馈与结果下载 |
 | Redis 状态存储 | 任务/进度状态经 Redis Hash + pub/sub 管理，支持 SSE 断线重连 |
 
@@ -99,7 +105,7 @@ ppt-speech/
 - **Python** ≥ 3.13
 - **uv**（推荐的包管理器，用于安装与运行）
 - 可访问互联网的 Edge TTS 服务（合成时需要在线）
-- **Redis**（仅服务端模式需要，默认 `192.168.79.160:6379`）
+- **Redis**（仅服务端模式需要，默认 `192.168.79.160:6379`，无鉴权）
 
 ## 安装
 
@@ -123,29 +129,46 @@ ppt-speech/
    uv sync
    ```
 
-   `uv sync` 会自动根据 `uv.lock` 创建虚拟环境并安装 `edge-tts`、`python-pptx`、`tinytag` 等核心依赖。
+   `uv sync` 会根据 `uv.lock` 创建虚拟环境并安装核心依赖（`edge-tts`、`python-pptx`、`tinytag`）。
+   此外，`pyproject.toml` 中 `[tool.uv] default-groups` 默认启用 `server` 与 `client` 两个依赖组，
+   因此 `uv sync` **会一并安装服务端与客户端依赖**（fastapi、uvicorn、redis、httpx 等），
+   可直接运行服务端与示例客户端。
 
-3. 按需安装可选依赖组（服务端 / 客户端 / 测试）：
+3. 按需安装测试依赖：
 
    ```bash
-   # 服务端模式（FastAPI + Redis + SSE）
-   uv pip install -e ".[server]"
-
-   # 客户端脚本（httpx + httpx-sse）
-   uv pip install -e ".[client]"
-
-   # 测试（coverage + fakeredis）
+   # 测试依赖（coverage + httpx + fakeredis）不在默认组内，需单独安装
    uv pip install -e ".[test]"
-
-   # 或一次性安装全部
-   uv pip install -e ".[server,client,test]"
+   # 或临时运行测试时一并拉取（见“开发与测试”一节）：
+   # uv run --extra test coverage run -m unittest discover -s tests
    ```
 
-   | 组 | 包 | 用途 |
-   | --- | --- | --- |
-   | `server` | fastapi, uvicorn[standard], redis, python-multipart | 运行 HTTP 服务 |
-   | `client` | httpx, httpx-sse | 运行 `client.py` |
-   | `test` | coverage, httpx, fakeredis | 运行测试 |
+   | 组 | 包 | 用途 | 是否随 `uv sync` 默认安装 |
+   | --- | --- | --- | --- |
+   | `server` | fastapi, uvicorn[standard], redis, python-multipart | 运行 HTTP 服务 | ✅ 是 |
+   | `client` | httpx, httpx-sse | 运行 `client.py` | ✅ 是 |
+   | `test` | coverage, httpx, fakeredis | 运行测试 | ❌ 否（需单独安装） |
+
+## 依赖项
+
+### 核心依赖（始终安装）
+
+| 包 | 版本要求 | 用途 |
+| --- | --- | --- |
+| [`edge-tts`](https://pypi.org/project/edge-tts/) | `>=7.2.8` | 在线 TTS 合成（**无需 API Key**，合成时需联网） |
+| [`python-pptx`](https://pypi.org/project/python-pptx/) | `>=1.0.2` | 读写 `.pptx` 与操作幻灯片媒体 |
+| [`tinytag`](https://pypi.org/project/tinytag/) | `>=2.3.0` | 纯 Python 读取音频时长（MP3/WAV/M4A/OGG/FLAC），无需 ffmpeg |
+| [`lxml`](https://pypi.org/project/lxml/) | （python-pptx 传递依赖，本项目直接使用） | 直接修改底层 OOXML 时序 XML |
+
+### 可选依赖（extras）
+
+| extra | 包 | 用途 |
+| --- | --- | --- |
+| `[server]` | fastapi, uvicorn[standard], redis, python-multipart | HTTP 服务端 |
+| `[client]` | httpx, httpx-sse | 示例客户端脚本 |
+| `[test]` | coverage, httpx, fakeredis | 测试套件 |
+
+> 核心库（`pipeline.py` / `config.py` / `tts_client.py` / `audio/` / `notes_reader.py` / `slide_transition.py`）不引入 fastapi/redis 依赖；服务端逻辑隔离在 `ppt_speech/server/` 子包内，作为可选 extra 提供。
 
 ## 使用说明
 
@@ -168,11 +191,11 @@ ppt-speech/
 4. 处理完成后，配音后的文件将保存为 `data/output.pptx`，控制台会输出每页的处理进度：
 
    ```text
-【第1页】生成语音：大家好，今天我们来介绍...
-   ⏱️ 第1页自动翻页：音频 12.3s + 缓冲 2.0s = 14.3s
-【第2页】无备注，跳过配音
-...
-✅ 处理完成！输出文件：data/output.pptx
+   【第1页】生成语音：大家好，今天我们来介绍...
+      ⏱️ 第1页自动翻页：音频 12.3s + 缓冲 2.0s = 14.3s
+   【第2页】无备注，跳过配音
+   ...
+   ✅ 处理完成！输出文件：data/output.pptx
    ```
 
 ### 作为库调用
@@ -224,7 +247,7 @@ Redis 作为任务/进度状态存储 + pub/sub 事件通道，支持 SSE 断线
 ### 快速开始
 
 ```bash
-# 1. 安装服务端 + 客户端依赖
+# 1. 安装服务端 + 客户端依赖（uv sync 已默认包含；如未安装可执行）
 uv pip install -e ".[server,client]"
 
 # 2. 启动服务（确保 Redis 192.168.79.160:6379 可达）
@@ -240,17 +263,18 @@ uv run python client.py \
 
 ### 主要端点
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| POST | `/api/v1/tasks` | 上传 pptx + 配置参数，返回 task_id（202） |
-| GET | `/api/v1/tasks/{id}/progress` | SSE 实时进度流 |
-| GET | `/api/v1/tasks/{id}` | 查询任务状态 |
-| GET | `/api/v1/tasks/{id}/result` | 下载结果 pptx |
-| GET | `/api/v1/health` | 健康检查（含 Redis 连通性） |
+| 方法 | 路径 | 说明 | 成功状态码 |
+| --- | --- | --- | --- |
+| POST | `/api/v1/tasks` | 上传 pptx + 配置参数，创建后台任务 | 202 |
+| GET | `/api/v1/tasks/{id}/progress` | SSE 实时进度流 | 200 |
+| GET | `/api/v1/tasks/{id}` | 查询任务状态 | 200 |
+| GET | `/api/v1/tasks/{id}/result` | 下载结果 pptx | 200 |
+| GET | `/api/v1/tasks` | 列出全部任务状态 | 200 |
+| GET | `/api/v1/health` | 健康检查（含 Redis 连通性） | 200 / 503 |
 
 客户端可传 `voice_name`、`speech_rate`、`auto_advance`、`auto_advance_delay` 参数。
-服务启动后访问 `/docs` 查看交互式 API 文档。手动测试用例见 [`test.http`](test.http)，
-客户端使用详见 [docs/client-usage.md](docs/client-usage.md)。
+服务启动后访问 `/docs`（Swagger）或 `/redoc` 查看交互式 API 文档。手动测试用例见
+[`test.http`](test.http)，客户端使用详见 [docs/client-usage.md](docs/client-usage.md)。
 
 ## 配置参数
 
@@ -332,8 +356,14 @@ uv run python -m ppt_speech.voices
 测试基于 Python 标准库 `unittest`，覆盖配置校验、语音名称规范化、备注读取、TTS 合成、音频嵌入、音频时长提取、幻灯片自动翻页时序、流程编排、完整流水线（mock），以及服务端的进度回调、Redis 状态存储、SSE 事件流、任务生命周期与 FastAPI 路由：
 
 ```bash
+# 安装测试依赖（fakeredis 等不在默认组内）
 uv pip install -e ".[test]"
+
+# 运行全部测试
 uv run coverage run -m unittest discover -s tests -v
+
+# 或一行搞定：临时拉取 test extra 并运行
+uv run --extra test coverage run -m unittest discover -s tests -v
 ```
 
 ### 查看覆盖率
@@ -343,7 +373,7 @@ uv run coverage report -m
 ```
 
 测试不依赖真实网络与真实 Redis（TTS、PPT 保存、Redis 均通过 mock / fakeredis 隔离），
-可在离线环境下运行。当前共 97 个测试，覆盖率约 94%。测试说明详见
+可在离线环境下运行。当前共 98 个测试，整体覆盖率约 95%。测试说明详见
 [docs/testing.md](docs/testing.md)。
 
 ### 代码风格约定
@@ -353,6 +383,21 @@ uv run coverage report -m
 - 各子模块保持独立、可单独导入与测试，遵循低耦合高内聚
 - 类型注解齐全，配合 `from __future__ import annotations`
 
+## 常见问题与已知问题
+
+| 现象 | 原因 | 解决方法 |
+| --- | --- | --- |
+| 服务启动失败：`无法连接 Redis ... 服务拒绝启动` | `lifespan` 启动时对 Redis `ping` 失败即 fail-fast | 确认 Redis 可达；通过环境变量 `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` 指向正确实例 |
+| TTS 合成失败 / `EdgeTTSException` | Edge TTS 需联网；网络中断或服务异常 | 检查网络连通性后重试 |
+| 下载结果返回 `409 not_ready` | 任务尚未完成（PENDING/PROCESSING） | 通过 SSE 进度流等待 `status: COMPLETED` 后再请求 `/result` |
+| 下载结果返回 `410 expired` | 结果文件超过 `RESULT_TTL_SECONDS`（默认 3600s）被清理协程删除 | 重新提交任务 |
+| 某页输出 `⚠️ ... 跳过自动翻页` | 该页音频缺失或时长解析失败（`get_audio_duration` 抛错） | 仅跳过该页自动翻页，不影响整体配音与保存；检查该页音频是否合成成功 |
+| 上传返回 `422 invalid_config` | 语音名称或语速格式不合法 | 语音名称需匹配 `语言-地区-名称Neural`，语速需匹配 `[+-]数字%`（见「配置参数」） |
+| Windows 重装依赖报 `ppt-speech-server.exe` 被占用 | 服务端进程正在运行，文件被锁定 | 先停止运行中的 `ppt-speech-server` 进程，再重新安装 |
+| 幻灯片未生成语音 | 该页备注为空，处理时自动跳过 | 在 PowerPoint「备注」区填写讲稿文字后重新运行 |
+
+> 服务端配置均可通过环境变量覆盖，便于容器化部署，详见 [docs/deployment.md](docs/deployment.md)。
+
 ## 贡献指南
 
 欢迎通过 Issue 和 Pull Request 参与贡献！
@@ -361,7 +406,7 @@ uv run coverage report -m
 2. 创建特性分支：`git checkout -b feature/your-feature`。
 3. 编写代码并补充对应测试，确保现有测试通过：
    ```bash
-   uv run --with coverage --group test coverage run -m unittest discover -s tests
+   uv run --extra test coverage run -m unittest discover -s tests
    ```
 4. 保持与现有代码风格一致（docstring、类型注解、模块化）。
 5. 提交清晰的 commit message，描述“为什么”而不仅是“做了什么”。
