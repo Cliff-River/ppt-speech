@@ -155,7 +155,8 @@ async def _consume_progress(
 
                 status = data.get("status", "")
                 line = _format_progress(data)
-                print(f"\r{line}", end="", flush=True)
+                # \r 回到行首，\033[K 清除到行尾，避免短消息覆盖长消息时残留旧字符
+                print(f"\r\033[K{line}", end="", flush=True)
 
                 if status == "COMPLETED":
                     print()  # 换行
