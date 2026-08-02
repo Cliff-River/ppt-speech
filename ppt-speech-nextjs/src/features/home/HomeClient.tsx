@@ -17,7 +17,7 @@ import {
   sortVoices,
   type VoiceFilters,
 } from "@/lib/voiceFilter";
-import { loadRecentVoices, pushRecentVoice } from "@/lib/recentVoices";
+import { loadRecentVoices, pushRecentVoice, type RecentVoice } from "@/lib/recentVoices";
 import {
   applyProgress,
   fromCreateResponse,
@@ -47,7 +47,7 @@ export function HomeClient({ locale }: { locale: Locale }) {
   const [voicesError, setVoicesError] = useState<string | null>(null);
 
   const [selectedVoice, setSelectedVoice] = useState<Voice | null>(null);
-  const [recentVoices, setRecentVoices] = useState(() => loadRecentVoices());
+  const [recentVoices, setRecentVoices] = useState<RecentVoice[]>([]);
 
   const [filters, setFilters] = useState<VoiceFilters>({
     query: "",
@@ -62,7 +62,8 @@ export function HomeClient({ locale }: { locale: Locale }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [tasks, setTasks] = useState<LocalTask[]>(() => loadTasks());
+  const [hydrated, setHydrated] = useState(false);
+  const [tasks, setTasks] = useState<LocalTask[]>(() => []);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [downloadBusyId, setDownloadBusyId] = useState<string | null>(null);
 
@@ -89,6 +90,12 @@ export function HomeClient({ locale }: { locale: Locale }) {
   }, [tasks, activeTaskId]);
 
   useEffect(() => {
+    setRecentVoices(loadRecentVoices());
+    setTasks(loadTasks());
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
 
     fetchVoices(controller.signal)
@@ -106,10 +113,12 @@ export function HomeClient({ locale }: { locale: Locale }) {
   }, [t]);
 
   useEffect(() => {
+    if (!hydrated) return;
     saveTasks(tasks);
-  }, [tasks]);
+  }, [hydrated, tasks]);
 
   useEffect(() => {
+    if (!hydrated) return;
     const controller = new AbortController();
     fetchTasks(controller.signal)
       .then((r) => {
@@ -135,7 +144,7 @@ export function HomeClient({ locale }: { locale: Locale }) {
       .catch(() => undefined);
 
     return () => controller.abort();
-  }, []);
+  }, [hydrated]);
 
   useEffect(() => {
     const current = esMapRef.current;
@@ -575,15 +584,22 @@ export function HomeClient({ locale }: { locale: Locale }) {
                       const canDownload =
                         task.status === "COMPLETED" || task.resultReady === true;
                       return (
-                        <button
+                        <div
                           key={task.taskId}
-                          type="button"
+                          role="button"
+                          tabIndex={0}
                           className={`flex w-full flex-col gap-1 rounded-md border px-3 py-2 text-left text-sm transition-colors ${
                             active
                               ? "border-zinc-400 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950"
                               : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-950"
                           }`}
                           onClick={() => setActiveTaskId(task.taskId)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setActiveTaskId(task.taskId);
+                            }
+                          }}
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="font-medium">
@@ -608,23 +624,25 @@ export function HomeClient({ locale }: { locale: Locale }) {
                             {task.percent !== undefined ? <span>{`${Math.round(task.percent)}%`}</span> : null}
                           </div>
                           <div className="flex items-center justify-end gap-2 pt-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              isDisabled={!canDownload || downloadBusyId === task.taskId}
-                              onPress={() => downloadResult(task)}
-                            >
-                              {downloadBusyId === task.taskId ? (
-                                <>
-                                  <Spinner size="sm" />
-                                  <span>{t("task.downloading")}</span>
-                                </>
-                              ) : (
-                                t("task.download")
-                              )}
-                            </Button>
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                isDisabled={!canDownload || downloadBusyId === task.taskId}
+                                onPress={() => downloadResult(task)}
+                              >
+                                {downloadBusyId === task.taskId ? (
+                                  <>
+                                    <Spinner size="sm" />
+                                    <span>{t("task.downloading")}</span>
+                                  </>
+                                ) : (
+                                  t("task.download")
+                                )}
+                              </Button>
+                            </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
