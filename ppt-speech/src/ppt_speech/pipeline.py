@@ -148,7 +148,16 @@ def _emit_progress(
 def _log(on_progress: "ProgressCallback | None", message: str) -> None:
     """无回调时打印消息（保持 CLI 原行为）；有回调时静默（服务端安静）。"""
     if on_progress is None:
-        print(message)
+        try:
+            print(message)
+        except UnicodeEncodeError:
+            import sys
+
+            encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+            safe_message = message.encode(encoding, errors="replace").decode(
+                encoding, errors="replace"
+            )
+            print(safe_message)
 
 
 @contextmanager

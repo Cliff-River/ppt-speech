@@ -81,6 +81,12 @@ def _parse_args() -> argparse.Namespace:
         default="./output.pptx",
         help="结果文件保存路径（默认 ./output.pptx）",
     )
+    parser.add_argument(
+        "--list-voices",
+        action="store_true",
+        default=False,
+        help="仅调用 /api/v1/voices 获取可用语音列表并退出",
+    )
     return parser.parse_args()
 
 
@@ -98,6 +104,41 @@ def _format_progress(event_data: dict) -> str:
             f"[{stage}] 第{idx}/{total}页 {percent}% {eta_str} — {message}"
         )
     return f"[{stage}] {percent}% {eta_str} — {message}"
+
+
+def _validate_voices_payload(payload: dict) -> tuple[bool, str]:
+    voices = payload.get("voices")
+    if not isinstance(voices, list):
+        return False, "响应缺少 voices 列表"
+    for idx, item in enumerate(voices[:10]):
+        if not isinstance(item, dict):
+            return False, f"voices[{idx}] 不是对象"
+        if "Name" not in item or "Locale" not in item or "Gender" not in item:
+            return False, f"voices[{idx}] 缺少必要字段"
+    return True, ""
+
+
+async def _fetch_voices(client: httpx.AsyncClient, base: str) -> bool:
+    resp = await client.get(f"{base}/api/v1/voices", timeout=httpx.Timeout(30.0))
+    if resp.status_code != 200:
+        print(f"❌ 获取 voices 失败 ({resp.status_code}): {resp.text}", file=sys.stderr)
+        return False
+    try:
+        payload = resp.json()
+    except Exception:
+        print("❌ voices 响应不是合法 JSON", file=sys.stderr)
+        return False
+
+    ok, err = _validate_voices_payload(payload)
+    if not ok:
+        print(f"❌ voices 响应格式错误: {err}", file=sys.stderr)
+        return False
+
+    voices = payload.get("voices", [])
+    print(f"✅ voices 数量: {len(voices)}")
+    if voices:
+        print(f"示例: {voices[0].get('Name', '')} ({voices[0].get('Locale', '')})")
+    return True
 
 
 async def _upload(client: httpx.AsyncClient, base: str, args) -> dict:
@@ -193,6 +234,9 @@ async def main_async() -> int:
     base = args.server.rstrip("/")
 
     async with httpx.AsyncClient() as client:
+        if args.list_voices:
+            return 0 if await _fetch_voices(client, base) else 1
+
         print(f"📤 上传文件: {args.input}")
         task_info = await _upload(client, base, args)
         task_id = task_info["task_id"]

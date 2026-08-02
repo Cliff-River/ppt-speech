@@ -144,6 +144,23 @@ async def health(redis: Redis = Depends(get_redis_dep)) -> JSONResponse:
     )
 
 
+@app.get("/api/v1/voices", response_model=None)
+async def list_voices() -> JSONResponse:
+    """获取 Edge TTS 可用语音列表。"""
+    from edge_tts.exceptions import EdgeTTSException
+
+    from ppt_speech.tts_client import get_voices_list
+
+    try:
+        voices = await get_voices_list()
+    except EdgeTTSException as exc:
+        return _error(502, "tts_unavailable", str(exc))
+    except Exception as exc:
+        return _error(500, "voices_failed", str(exc))
+
+    return JSONResponse(status_code=200, content={"voices": voices})
+
+
 @app.post("/api/v1/tasks", response_model=None)
 async def create_task(
     file: Optional[UploadFile] = File(None),

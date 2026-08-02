@@ -204,6 +204,48 @@ class TestServerApp(unittest.TestCase):
         self.assertEqual(resp.json()["code"], "too_large")
 
     # ------------------------------------------------------------------
+    # voices 列表
+    # ------------------------------------------------------------------
+
+    def test_list_voices_success(self) -> None:
+        voices = [
+            {"Name": "Voice A", "Locale": "en-US", "Gender": "Female"},
+            {"Name": "Voice B", "Locale": "zh-CN", "Gender": "Male"},
+        ]
+        with patch(
+            "ppt_speech.tts_client.get_voices_list",
+            new=AsyncMock(return_value=voices),
+        ):
+            with self._client() as client:
+                resp = client.get("/api/v1/voices")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIn("voices", body)
+        self.assertEqual(body["voices"], voices)
+
+    def test_list_voices_tts_error(self) -> None:
+        from edge_tts.exceptions import EdgeTTSException
+
+        with patch(
+            "ppt_speech.tts_client.get_voices_list",
+            new=AsyncMock(side_effect=EdgeTTSException("boom")),
+        ):
+            with self._client() as client:
+                resp = client.get("/api/v1/voices")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json()["code"], "tts_unavailable")
+
+    def test_list_voices_unexpected_error(self) -> None:
+        with patch(
+            "ppt_speech.tts_client.get_voices_list",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            with self._client() as client:
+                resp = client.get("/api/v1/voices")
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.json()["code"], "voices_failed")
+
+    # ------------------------------------------------------------------
     # 查询任务
     # ------------------------------------------------------------------
 

@@ -124,3 +124,7 @@ Accept: application/json
 ###    需在上传后立即查询未完成的任务
 GET {{host}}/api/v1/tasks/{{taskId}}/result
 Accept: application/json
+
+### 13. 列出全部语音（应 200，返回 voices 数组）
+GET {{host}}/api/v1/voices
+Accept: application/json
