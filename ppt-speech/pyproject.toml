@@ -44,7 +44,10 @@ test = ["coverage>=7.0"]
 # 这样 default-groups 就能控制它们，且不必重复声明版本号。
 server = ["ppt-speech[server]"]
 client = ["ppt-speech[client]"]
+dev = [
+    "ipykernel>=7.3.0",
+]
 
 [tool.uv]
 # uv sync / uv run 默认安装 server 与 client 组（仍可用 --no-group 排除）
-default-groups = ["server", "client"]
+default-groups = ["server", "client", "dev"]
