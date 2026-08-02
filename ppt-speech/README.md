@@ -271,6 +271,7 @@ uv run python client.py \
 | GET | `/api/v1/tasks/{id}/result` | 下载结果 pptx | 200 |
 | GET | `/api/v1/tasks` | 列出全部任务状态 | 200 |
 | GET | `/api/v1/health` | 健康检查（含 Redis 连通性） | 200 / 503 |
+| GET | `/api/v1/voices` | 列出 Edge TTS 可用语音列表 | 200 / 502 / 500 |
 
 客户端可传 `voice_name`、`speech_rate`、`auto_advance`、`auto_advance_delay` 参数。
 服务启动后访问 `/docs`（Swagger）或 `/redoc` 查看交互式 API 文档。手动测试用例见

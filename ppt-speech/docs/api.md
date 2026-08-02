@@ -142,3 +142,11 @@ SSE 实时进度流。`Content-Type: text/event-stream`。
 
 - `200` `{"status":"ok","redis":true,"version":"0.1.0"}`
 - `503` `{"status":"degraded","redis":false,"version":"0.1.0"}`
+
+## GET /api/v1/voices
+
+列出 Edge TTS 可用语音列表。
+
+- `200` `{"voices": [ <语音对象>, ... ]}`
+- `502` `{"tts_unavailable":"Edge TTS 服务不可用"}`
+- `500` `{"voices_failed":"获取语音列表失败"}`
