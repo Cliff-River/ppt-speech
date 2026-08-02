@@ -4,3 +4,4 @@ allowBuilds:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+storeDir: e:\Documents\Projects\ppt-speech\.pnpm-store
