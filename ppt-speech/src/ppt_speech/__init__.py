@@ -9,22 +9,19 @@ OOXML 时序，使其在幻灯片进入时自动播放。同时根据每页音�
 最终输出一份「自带旁白、自动推进」的演示文稿，适合录制网课、自动讲解、
 无障碍演示等场景。
 
-模块地图
+子包结构
 ========
-- :mod:`ppt_speech.config` — :class:`PTSpeechConfig` 配置数据类与校验逻辑。
-- :mod:`ppt_speech.notes_reader` — 从幻灯片提取备注文字。
-- :mod:`ppt_speech.tts_client` — Edge TTS 客户端：合成、语音列表、名称规范化。
-- :mod:`ppt_speech.audio` — 音频处理子包：时长解析（tinytag）与音频嵌入。
-- :mod:`ppt_speech.slide_transition` — 设置幻灯片自动翻页时序（修改 OOXML advTm）。
-- :mod:`ppt_speech.pipeline` — 顶层编排：:func:`speak_ppt_notes` / :func:`process_slides`。
-- :mod:`ppt_speech.voices` — 辅助工具：拉取并缓存可用语音列表到 ``voices.json``。
+- :mod:`ppt_speech.core` — 核心处理逻辑（配置、流水线、TTS、音频、翻页）。
+- :mod:`ppt_speech.core.audio` — 音频处理子包（时长解析与嵌入）。
+- :mod:`ppt_speech.server` — 服务端子包（FastAPI HTTP 服务、SSE、Redis）。
+- :mod:`ppt_speech.cli` — 命令行界面子包。
 
-依赖
-====
-- `edge-tts`：在线 TTS 合成（**无需 API Key**，合成时需联网）。
-- `python-pptx`：读写 ``.pptx`` 与操作幻灯片媒体。
-- `tinytag`：纯 Python 读取音频时长，支持 MP3/WAV/M4A/OGG/FLAC，无需 ffmpeg。
-- `lxml`：直接修改底层 OOXML 时序 XML。
+依赖关系
+========
+- ``core`` 子包不依赖 ``server`` 和 ``cli``。
+- ``server`` 和 ``cli`` 子包可依赖 ``core`` 提供的公共功能。
+- 本文件同时向后兼容：从旧路径（``ppt_speech.config``、``ppt_speech.audio``
+  等）导入仍然可用。
 
 快速使用
 ========
@@ -45,7 +42,7 @@ OOXML 时序，使其在幻灯片进入时自动播放。同时根据每页音�
 
 - ``uv run ppt-speech``（等价于 ``uv run python -m ppt_speech``）：以默认配置
   运行完整配音流程。
-- ``uv run python -m ppt_speech.voices``：刷新可用语音列表到 ``voices.json``。
+- ``uv run python -m ppt_speech.cli.voices``：刷新可用语音列表到 ``voices.json``。
 
 注意事项
 ========
@@ -57,15 +54,14 @@ OOXML 时序，使其在幻灯片进入时自动播放。同时根据每页音�
   （无论成功与否）自动清理；亦可通过 ``PTSpeechConfig.temp_audio_dir`` 指定。
 - **优雅降级**：某页音频缺失或时长解析失败时仅跳过该页自动翻页（打印
   ``⚠️`` 警告），不影响整体配音与保存流程。
-- 公共 API 统一由本 ``__init__`` 模块导出；子模块亦可单独导入使用。
 """
 
-from ppt_speech.audio import embed_audio_autoplay, get_audio_duration
-from ppt_speech.config import PTSpeechConfig
-from ppt_speech.notes_reader import read_notes_text
-from ppt_speech.pipeline import process_slides, speak_ppt_notes
-from ppt_speech.slide_transition import set_advance_after_time
-from ppt_speech.tts_client import get_voices_list, normalize_voice_name, text_to_mp3
+from ppt_speech.core.audio import embed_audio_autoplay, get_audio_duration
+from ppt_speech.core.config import PTSpeechConfig
+from ppt_speech.core.notes_reader import read_notes_text
+from ppt_speech.core.pipeline import process_slides, speak_ppt_notes
+from ppt_speech.core.slide_transition import set_advance_after_time
+from ppt_speech.core.tts_client import get_voices_list, normalize_voice_name, text_to_mp3
 
 __all__ = [
     "PTSpeechConfig",
@@ -95,4 +91,6 @@ def main() -> None:
     """
     import asyncio
 
-    asyncio.run(speak_ppt_notes())
+    from ppt_speech.cli.main import main as cli_main
+
+    cli_main()

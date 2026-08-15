@@ -70,17 +70,33 @@ ppt-speech/
 │   └── ppt_speech/
 │       ├── __init__.py            # 包入口：包级文档 + 完整公共 API + main()
 │       ├── __main__.py            # 支持 python -m ppt_speech 运行完整流程
-│       ├── config.py              # PTSpeechConfig 配置类与校验逻辑
-│       ├── notes_reader.py        # 从幻灯片提取备注文字
-│       ├── tts_client.py          # Edge TTS 客户端（合成、语音列表、名称规范化）
-│       ├── audio/                 # 音频处理子包
-│       │   ├── __init__.py        # 子包入口：re-export 音频公共接口
-│       │   ├── duration.py        # 读取音频时长（基于 tinytag，支持 MP3/WAV 等）
-│       │   └── embedder.py        # 将 MP3 嵌入幻灯片并配置自动播放
-│       ├── slide_transition.py    # 设置幻灯片自动翻页时序（修改 OOXML advTm）
-│       ├── pipeline.py            # 顶层编排：speak_ppt_notes / process_slides（支持 on_progress 回调）
-│       ├── voices.py              # 辅助工具：刷新可用语音列表到 voices.json
-│       └── server/                # 服务端子包（FastAPI + Redis + SSE，需 [server] extra）
+│       ├── config.py              # [兼容层] 重导出 core.config
+│       ├── notes_reader.py        # [兼容层] 重导出 core.notes_reader
+│       ├── tts_client.py          # [兼容层] 重导出 core.tts_client
+│       ├── slide_transition.py    # [兼容层] 重导出 core.slide_transition
+│       ├── pipeline.py            # [兼容层] 重导出 core.pipeline
+│       ├── voices.py              # [兼容层] 重导出 cli.voices
+│       ├── core/                  # 核心子包：业务逻辑与公共功能
+│       │   ├── __init__.py        # 重导出所有公共接口
+│       │   ├── config.py          # PTSpeechConfig 配置类与校验逻辑
+│       │   ├── notes_reader.py    # 从幻灯片提取备注文字
+│       │   ├── tts_client.py      # Edge TTS 客户端（合成、语音列表、名称规范化）
+│       │   ├── slide_transition.py # 设置幻灯片自动翻页时序（修改 OOXML advTm）
+│       │   ├── pipeline.py        # 顶层编排：speak_ppt_notes / process_slides
+│       │   └── audio/             # 音频处理子包
+│       │       ├── __init__.py    # 子包入口：re-export 音频公共接口
+│       │       ├── duration.py    # 读取音频时长（基于 tinytag）
+│       │       └── embedder.py    # 将 MP3 嵌入幻灯片并配置自动播放
+│       ├── cli/                   # 命令行界面子包
+│       │   ├── __init__.py        # 暴露 main() 入口
+│       │   ├── __main__.py        # 支持 python -m ppt_speech.cli
+│       │   ├── main.py            # CLI 参数解析与入口
+│       │   └── voices.py          # 刷新可用语音列表
+│       ├── audio/                 # [兼容层] 音频处理子包
+│       │   ├── __init__.py        # 重导出 core.audio 接口
+│       │   ├── duration.py        # 重导出 core.audio.duration
+│       │   └── embedder.py        # 重导出 core.audio.embedder
+│       └── server/                # 服务端子包（FastAPI + Redis + SSE）
 │           ├── __init__.py        # 暴露 main() 控制台入口
 │           ├── __main__.py        # 支持 python -m ppt_speech.server
 │           ├── config.py          # ServerConfig（env 读取）

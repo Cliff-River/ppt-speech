@@ -9,12 +9,13 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "edge-tts>=7.2.8",
+    "fakeredis>=2.37.0",
     "python-pptx>=1.0.2",
     "tinytag>=2.3.0",
 ]
 
 [project.scripts]
-ppt-speech = "ppt_speech:main"
+ppt-speech = "ppt_speech.cli:main"
 ppt-speech-server = "ppt_speech.server:main"
 
 [project.optional-dependencies]

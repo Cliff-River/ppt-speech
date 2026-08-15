@@ -10,32 +10,109 @@ HTTP 上传 `.pptx` 文件，服务端在后台运行「备注提取 → TTS 合
 **Redis** 作为任务/进度状态存储与 pub/sub 事件广播通道，使 SSE 支持客户端
 断线重连与多订阅者。Redis **不缓存** TTS 音频字节或最终 pptx 文件。
 
+## 子包架构
+
+项目代码按职责划分为四个主要子包：
+
+### core 子包 — 业务逻辑与公共功能
+
+`ppt_speech.core` 包含程序的核心处理逻辑，不依赖 server 和 cli 子包。
+
+| 模块 | 职责 |
+| --- | --- |
+| `core/__init__.py` | 重导出所有公共接口，作为核心 API 入口 |
+| `core/config.py` | `PTSpeechConfig` 数据类，处理配置与校验 |
+| `core/notes_reader.py` | 从幻灯片提取备注文字 |
+| `core/tts_client.py` | Edge TTS 客户端：合成、语音列表、名称规范化 |
+| `core/slide_transition.py` | 设置幻灯片自动翻页时序（修改 OOXML advTm） |
+| `core/pipeline.py` | 顶层编排：`speak_ppt_notes` / `process_slides`，支持 `on_progress` 回调 |
+| `core/audio/` | 音频处理子包 |
+| `core/audio/duration.py` | 读取音频时长（基于 tinytag，支持 MP3/WAV 等） |
+| `core/audio/embedder.py` | 将 MP3 嵌入幻灯片并配置自动播放 |
+
+### cli 子包 — 命令行界面
+
+`ppt_speech.cli` 提供命令行入口，依赖 core 子包，不依赖 server 子包。
+
+| 模块 | 职责 |
+| --- | --- |
+| `cli/__init__.py` | 暴露 `main()` 入口 |
+| `cli/__main__.py` | 支持 `python -m ppt_speech.cli` 运行 |
+| `cli/main.py` | CLI 参数解析（argparse）与入口实现 |
+| `cli/voices.py` | 刷新可用语音列表到 `voices.json` |
+
+### server 子包 — 后端服务
+
+`ppt_speech.server` 提供基于 FastAPI 的 HTTP 服务，依赖 core 子包。
+
+| 模块 | 职责 |
+| --- | --- |
+| `server/app.py` | FastAPI 路由定义 + lifespan 管理 |
+| `server/config.py` | `ServerConfig`（从环境变量读取） |
+| `server/tasks.py` | `TaskManager`：任务生命周期 + 后台 worker |
+| `server/progress.py` | `ProgressReporter` 回调实现 + 事件 schema |
+| `server/sse.py` | `event_stream` SSE 生成器 |
+| `server/redis_client.py` | `redis.asyncio` 单例 + 键命名 + ping |
+| `server/cleanup.py` | 磁盘清理协程 |
+
+### 兼容层（Shell Modules）
+
+根目录下保留了旧模块路径作为兼容层（re-export shell），确保现有导入路径（如 `from ppt_speech.config import PTSpeechConfig`）仍然有效：
+
+- `ppt_speech/config.py` → 重导出 `ppt_speech.core.config`
+- `ppt_speech/notes_reader.py` → 重导出 `ppt_speech.core.notes_reader`
+- `ppt_speech/tts_client.py` → 重导出 `ppt_speech.core.tts_client`
+- `ppt_speech/slide_transition.py` → 重导出 `ppt_speech.core.slide_transition`
+- `ppt_speech/pipeline.py` → 重导出 `ppt_speech.core.pipeline`
+- `ppt_speech/audio/` → 重导出 `ppt_speech.core.audio`
+
 ## 组件分层
 
 ```
 ┌──────────────┐   HTTP/SSE    ┌──────────────────────────────────────┐
 │  client.py   │ ────────────▶ │         FastAPI 服务端                │
-│ (httpx+sse)  │ ◀──────────── │  app.py  路由 + lifespan              │
-└──────────────┘   结果下载    │   ├─ tasks.py     TaskManager/worker  │
-                              │   ├─ progress.py  ProgressReporter     │
-                              │   ├─ sse.py       event_stream         │
-                              │   └─ redis_client.py                   │
+│ (httpx+sse)  │ ◀──────────── │  server/app.py  路由 + lifespan       │
+└──────────────┘   结果下载    │   ├─ server/tasks.py    TaskManager   │
+                              │   ├─ server/progress.py ProgressReporter│
+                              │   ├─ server/sse.py      event_stream   │
+                              │   └─ server/redis_client.py           │
                               └───────────┬──────────────┬─────────────┘
                                           │              │
                           on_progress 回调 │              │ HSET/PUBLISH
                                           ▼              ▼
                               ┌─────────────────┐  ┌──────────────────┐
-                              │ 核心 pipeline    │  │   Redis          │
+                              │ core/pipeline   │  │   Redis          │
                               │ process_slides  │  │ task:{id} Hash   │
                               │ (零服务端依赖)   │  │ events:{id} pub  │
                               └─────────────────┘  └──────────────────┘
+                                       ▲
+                                       │ 共用
+                              ┌────────┴────────┐
+                              │ cli/main.py      │
+                              │ (命令行入口)     │
+                              └─────────────────┘
 ```
+
+## 模块依赖关系
+
+```
+cli ──▶ core ◀── server
+         ▲
+         │ （兼容层重导出）
+ppt_speech 根包
+```
+
+**依赖规则：**
+1. `core` 子包**不依赖** `server` 和 `cli` 子包
+2. `server` 和 `cli` 子包可依赖 `core` 子包提供的公共功能
+3. 根包的兼容层（shell modules）仅做重导出，不包含业务逻辑
+4. 避免循环依赖：`core` → 第三方库（edge-tts, python-pptx, tinytag），`server` → `core` + FastAPI + Redis
 
 ## 核心设计原则
 
 ### 1. 核心库零服务端依赖
-`pipeline.py`、`config.py`、`tts_client.py`、`audio/`、`notes_reader.py`、
-`slide_transition.py`、`__init__.py` **不引入** fastapi/redis 等依赖。进度
+`core/pipeline.py`、`core/config.py`、`core/tts_client.py`、`core/audio/`、`core/notes_reader.py`、
+`core/slide_transition.py` **不引入** fastapi/redis 等依赖。进度
 通过回调注入（`on_progress: Callable[[dict], None]`）上报，CLI 与服务端共用
 同一套编排逻辑：
 - **CLI**：`on_progress=None` → 走原 `print` 输出（行为与历史版本逐字一致）。

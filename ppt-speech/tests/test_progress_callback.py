@@ -52,9 +52,9 @@ class TestProgressCallback(unittest.IsolatedAsyncioTestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch("ppt_speech.pipeline.embed_audio_autoplay")
-    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.pipeline.read_notes_text")
+    @patch("ppt_speech.core.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.core.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.core.pipeline.read_notes_text")
     async def test_event_sequence_and_percent(
         self,
         mock_read_notes: MagicMock,
@@ -93,9 +93,9 @@ class TestProgressCallback(unittest.IsolatedAsyncioTestCase):
         # 事件含 total_slides
         self.assertTrue(all(e["total_slides"] == 2 for e in events))
 
-    @patch("ppt_speech.pipeline.embed_audio_autoplay")
-    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.pipeline.read_notes_text")
+    @patch("ppt_speech.core.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.core.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.core.pipeline.read_notes_text")
     async def test_no_notes_emits_only_reading(
         self,
         mock_read_notes: MagicMock,
@@ -115,9 +115,9 @@ class TestProgressCallback(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(STAGE_SYNTHESIZING, stages)
         self.assertNotIn(STAGE_EMBEDDING, stages)
 
-    @patch("ppt_speech.pipeline.embed_audio_autoplay")
-    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.pipeline.read_notes_text")
+    @patch("ppt_speech.core.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.core.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.core.pipeline.read_notes_text")
     async def test_print_visible_without_callback(
         self,
         mock_read_notes: MagicMock,
@@ -138,9 +138,9 @@ class TestProgressCallback(unittest.IsolatedAsyncioTestCase):
         self.assertIn("【第1页】生成语音", output)
         self.assertIn("✅ 处理完成", output)
 
-    @patch("ppt_speech.pipeline.embed_audio_autoplay")
-    @patch("ppt_speech.pipeline.text_to_mp3", new_callable=AsyncMock)
-    @patch("ppt_speech.pipeline.read_notes_text")
+    @patch("ppt_speech.core.pipeline.embed_audio_autoplay")
+    @patch("ppt_speech.core.pipeline.text_to_mp3", new_callable=AsyncMock)
+    @patch("ppt_speech.core.pipeline.read_notes_text")
     async def test_print_silent_with_callback(
         self,
         mock_read_notes: MagicMock,
@@ -165,12 +165,12 @@ class TestProgressCallback(unittest.IsolatedAsyncioTestCase):
         """speak_ppt_notes 无回调时对 process_slides 精确 2 参调用（保 line 1013）。"""
         mock_prs = MagicMock()
         with (
-            patch("ppt_speech.pipeline.Presentation", return_value=mock_prs),
+            patch("ppt_speech.core.pipeline.Presentation", return_value=mock_prs),
             patch(
-                "ppt_speech.pipeline.process_slides", new_callable=AsyncMock
+                "ppt_speech.core.pipeline.process_slides", new_callable=AsyncMock
             ) as mock_process,
         ):
-            from ppt_speech.pipeline import speak_ppt_notes
+            from ppt_speech.core.pipeline import speak_ppt_notes
 
             await speak_ppt_notes(self.config)
             # 精确 2 参调用（保住既有测试断言语义）
