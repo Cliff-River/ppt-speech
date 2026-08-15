@@ -1,4 +1,8 @@
-﻿# 项目结构（ppt-speech）
+﻿---
+alwaysApply: false
+description: 
+---
+# 项目结构（ppt-speech）
 
 本文件描述仓库的目录结构、各目录职责与放置约束，用于指导新增/修改文件时的归类。团队规范与流程规则见 `docs/development-rules.md`。
 
@@ -16,34 +20,6 @@ ppt-speech/
 ├── pyproject.toml          # 依赖与脚本入口（uv/PEP621）
 ├── uv.lock                 # 依赖锁文件（uv 维护）
 └── .python-version         # Python 版本固定
-```
-
-## 核心源码：src/ppt_speech
-
-```
-src/ppt_speech/
-├── __init__.py             # 包入口：聚合对外公共 API、CLI main
-├── __main__.py             # python -m ppt_speech 入口
-├── config.py               # PTSpeechConfig：处理配置与校验
-├── notes_reader.py         # 从幻灯片读取备注文本
-├── tts_client.py           # Edge TTS 合成（文本→MP3）、语音名称规范化
-├── slide_transition.py     # 设置幻灯片自动翻页（OOXML advTm）
-├── pipeline.py             # 顶层编排：读备注→合成→嵌入→翻页→保存（支持 on_progress）
-├── voices.py               # 刷新语音列表到 voices.json
-├── audio/                  # 音频子包（嵌入与时长解析）
-│   ├── __init__.py
-│   ├── duration.py
-│   └── embedder.py
-└── server/                 # 可选服务端（FastAPI + Redis + SSE）
-    ├── __init__.py
-    ├── __main__.py
-    ├── app.py
-    ├── config.py
-    ├── redis_client.py
-    ├── progress.py
-    ├── sse.py
-    ├── tasks.py
-    └── cleanup.py
 ```
 
 ## 测试与文档
