@@ -5,7 +5,7 @@
 
 - 项目名称：ppt-speech-nextjs
 - 项目描述：PowerPoint 自动配音平台的前端，支持用户上传 ppt 文件，从服务器获取实时进度和下载配音结果。
-- 技术栈：Next.js 16 + TypeScript + Tailwind CSS + HeroUI.
+- 技术栈：Next.js 16 + TypeScript + Tailwind CSS + HeroUI + Vitest.
 
 ## 包管理
 
@@ -24,5 +24,7 @@
 - 若遇到HeroUI与Tailwind CSS无法实现的 UI 需求，或者其不够美观，可使用原生HTML+CSS补充实现
 
 - 设计页面美观，符合用户习惯。
+
+- 默认主题颜色：绿色。
 
 - 响应式设计，适配不同屏幕尺寸，确保在PC端、移动端等不同环境下都能正常显示与操作。
