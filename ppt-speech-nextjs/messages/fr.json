@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "Voix pour PPT",
+    "subtitle": "Téléversez un PPTX, suivez la progression en temps réel et téléchargez le résultat"
+  },
+  "nav": {
+    "language": "Langue"
+  },
+  "voice": {
+    "section": "Voix",
+    "search": {
+      "label": "Rechercher",
+      "placeholder": "Rechercher par FriendlyName"
+    },
+    "gender": {
+      "label": "Genre",
+      "any": "Tous",
+      "female": "Femme",
+      "male": "Homme",
+      "neutral": "Neutre"
+    },
+    "language": {
+      "label": "Langue"
+    },
+    "region": {
+      "label": "Région"
+    },
+    "multilingual": "Multilingue uniquement",
+    "style": {
+      "label": "Style",
+      "any": "Tous"
+    },
+    "quick": {
+      "title": "Récents"
+    },
+    "selected": "Sélectionné"
+  },
+  "upload": {
+    "section": "Téléversement",
+    "file": {
+      "label": "Fichier PPTX",
+      "hint": "Seulement .pptx est pris en charge"
+    },
+    "submit": "Envoyer",
+    "submitting": "Envoi…"
+  },
+  "task": {
+    "section": "Tâches",
+    "empty": "Aucune tâche",
+    "reconnect": "Reconnecter la progression",
+    "download": "Télécharger",
+    "downloading": "Téléchargement…",
+    "notReady": "Le résultat n’est pas prêt",
+    "expired": "Résultat expiré. Veuillez renvoyer.",
+    "failed": "Échec de la tâche"
+  },
+  "progress": {
+    "section": "Progression",
+    "connecting": "Connexion…",
+    "disconnected": "Déconnecté",
+    "stage": "Étape",
+    "slide": "Diapositive",
+    "percent": "Progression"
+  },
+  "common": {
+    "refresh": "Rafraîchir",
+    "retry": "Réessayer",
+    "clear": "Effacer"
+  },
+  "error": {
+    "generic": "Échec de la requête. Veuillez réessayer plus tard."
+  }
+}

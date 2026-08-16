@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "PPT 自動ナレーション",
+    "subtitle": "PPTX をアップロードし、進捗をリアルタイム表示して、結果をダウンロードできます"
+  },
+  "nav": {
+    "language": "言語"
+  },
+  "voice": {
+    "section": "音声",
+    "search": {
+      "label": "検索",
+      "placeholder": "FriendlyName で検索"
+    },
+    "gender": {
+      "label": "性別",
+      "any": "すべて",
+      "female": "女性",
+      "male": "男性",
+      "neutral": "中性"
+    },
+    "language": {
+      "label": "言語"
+    },
+    "region": {
+      "label": "地域"
+    },
+    "multilingual": "多言語のみ",
+    "style": {
+      "label": "スタイル",
+      "any": "すべて"
+    },
+    "quick": {
+      "title": "最近"
+    },
+    "selected": "選択済み"
+  },
+  "upload": {
+    "section": "アップロード",
+    "file": {
+      "label": "PPTX ファイル",
+      "hint": ".pptx のみ対応"
+    },
+    "submit": "送信",
+    "submitting": "送信中…"
+  },
+  "task": {
+    "section": "タスク",
+    "empty": "タスクなし",
+    "reconnect": "進捗を再接続",
+    "download": "ダウンロード",
+    "downloading": "ダウンロード中…",
+    "notReady": "結果はまだ準備できていません",
+    "expired": "結果の有効期限が切れました。再送信してください。",
+    "failed": "タスク失敗"
+  },
+  "progress": {
+    "section": "進捗",
+    "connecting": "接続中…",
+    "disconnected": "切断されました",
+    "stage": "ステージ",
+    "slide": "スライド",
+    "percent": "進捗"
+  },
+  "common": {
+    "refresh": "更新",
+    "retry": "再試行",
+    "clear": "クリア"
+  },
+  "error": {
+    "generic": "リクエストに失敗しました。しばらくしてから再試行してください。"
+  }
+}

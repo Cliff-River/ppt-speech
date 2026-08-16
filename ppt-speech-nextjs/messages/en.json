@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "PPT Voiceover",
+    "subtitle": "Upload a PPTX, track progress in real-time, and download the voiced result"
+  },
+  "nav": {
+    "language": "Language"
+  },
+  "voice": {
+    "section": "Voice",
+    "search": {
+      "label": "Search",
+      "placeholder": "Search by FriendlyName"
+    },
+    "gender": {
+      "label": "Gender",
+      "any": "Any",
+      "female": "Female",
+      "male": "Male",
+      "neutral": "Neutral"
+    },
+    "language": {
+      "label": "Language"
+    },
+    "region": {
+      "label": "Region"
+    },
+    "multilingual": "Multilingual only",
+    "style": {
+      "label": "Style",
+      "any": "Any"
+    },
+    "quick": {
+      "title": "Recent"
+    },
+    "selected": "Selected"
+  },
+  "upload": {
+    "section": "Upload",
+    "file": {
+      "label": "PPTX file",
+      "hint": "Only .pptx is supported"
+    },
+    "submit": "Submit",
+    "submitting": "Submitting…"
+  },
+  "task": {
+    "section": "Tasks",
+    "empty": "No tasks yet",
+    "reconnect": "Reconnect progress",
+    "download": "Download",
+    "downloading": "Downloading…",
+    "notReady": "Result is not ready",
+    "expired": "Result expired. Please re-submit.",
+    "failed": "Task failed"
+  },
+  "progress": {
+    "section": "Progress",
+    "connecting": "Connecting…",
+    "disconnected": "Disconnected",
+    "stage": "Stage",
+    "slide": "Slide",
+    "percent": "Progress"
+  },
+  "common": {
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "clear": "Clear"
+  },
+  "error": {
+    "generic": "Request failed. Please try again later."
+  }
+}
