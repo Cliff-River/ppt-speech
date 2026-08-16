@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "PPT 自动配音",
+    "subtitle": "Upload PPTX, view real-time progress, and download the result file with voice"
+  },
+  "nav": {
+    "language": "语言"
+  },
+  "voice": {
+    "section": "语音选择",
+    "search": {
+      "label": "搜索",
+      "placeholder": "按名称搜索（FriendlyName）"
+    },
+    "gender": {
+      "label": "性别",
+      "any": "全部",
+      "female": "女声",
+      "male": "男声",
+      "neutral": "中性"
+    },
+    "language": {
+      "label": "语言"
+    },
+    "region": {
+      "label": "地区"
+    },
+    "multilingual": "仅多语言（Multilingual）",
+    "style": {
+      "label": "风格",
+      "any": "全部"
+    },
+    "quick": {
+      "title": "最近使用"
+    },
+    "selected": "已选择"
+  },
+  "upload": {
+    "section": "上传并开始",
+    "file": {
+      "label": "PPTX 文件",
+      "hint": "仅支持 .pptx"
+    },
+    "submit": "提交任务",
+    "submitting": "提交中…"
+  },
+  "task": {
+    "section": "任务",
+    "empty": "暂无任务",
+    "reconnect": "重新连接进度",
+    "download": "下载结果",
+    "downloading": "下载中…",
+    "notReady": "结果尚未就绪",
+    "expired": "结果已过期，请重新提交",
+    "failed": "任务失败"
+  },
+  "progress": {
+    "section": "实时进度",
+    "connecting": "连接中…",
+    "disconnected": "已断开",
+    "stage": "阶段",
+    "slide": "页码",
+    "percent": "进度"
+  },
+  "common": {
+    "refresh": "刷新",
+    "retry": "重试",
+    "clear": "清空"
+  },
+  "error": {
+    "generic": "请求失败，请稍后重试"
+  }
+}
