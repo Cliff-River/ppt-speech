@@ -13,7 +13,7 @@
 
 from ppt_speech.core.audio.duration import get_audio_duration
 from ppt_speech.core.audio.embedder import embed_audio_autoplay
-from ppt_speech.core.config import PTSpeechConfig
+from ppt_speech.core.config import PptSpeechConfig
 from ppt_speech.core.notes_reader import read_notes_text
 from ppt_speech.core.pipeline import process_slides, speak_ppt_notes
 from ppt_speech.core.slide_transition import set_advance_after_time
@@ -24,7 +24,7 @@ from ppt_speech.core.tts_client import (
 )
 
 __all__ = [
-    "PTSpeechConfig",
+    "PptSpeechConfig",
     "speak_ppt_notes",
     "process_slides",
     "read_notes_text",

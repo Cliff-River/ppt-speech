@@ -7,7 +7,7 @@
 """
 
 from ppt_speech.core.audio import embed_audio_autoplay, get_audio_duration
-from ppt_speech.core.config import PTSpeechConfig
+from ppt_speech.core.config import PptSpeechConfig
 from ppt_speech.core.notes_reader import read_notes_text
 from ppt_speech.core.pipeline import (
     STAGE_COMPLETED,
@@ -35,7 +35,7 @@ __all__ = [
     "STAGE_COMPLETED",
     "ProcessProgressEvent",
     "ProgressCallback",
-    "PTSpeechConfig",
+    "PptSpeechConfig",
     "read_notes_text",
     "text_to_mp3",
     "embed_audio_autoplay",

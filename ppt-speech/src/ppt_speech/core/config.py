@@ -15,7 +15,7 @@ _VOICE_PATTERN = re.compile(r"^([a-z]{2,})-([A-Z]{2,})-(.+Neural)$")
 
 
 @dataclass(slots=True)
-class PTSpeechConfig:
+class PptSpeechConfig:
     """PPT 配音处理配置。
 
     Attributes:

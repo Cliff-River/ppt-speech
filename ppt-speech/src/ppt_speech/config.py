@@ -5,6 +5,6 @@
 新代码建议直接使用 ``ppt_speech.core.config``。
 """
 
-from ppt_speech.core.config import PTSpeechConfig
+from ppt_speech.core.config import PptSpeechConfig
 
-__all__ = ["PTSpeechConfig"]
+__all__ = ["PptSpeechConfig"]

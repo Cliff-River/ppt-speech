@@ -40,7 +40,7 @@ from pptx import Presentation
 from pptx.slide import Slide
 
 from ppt_speech.core.audio import embed_audio_autoplay, get_audio_duration
-from ppt_speech.core.config import PTSpeechConfig
+from ppt_speech.core.config import PptSpeechConfig
 from ppt_speech.core.notes_reader import read_notes_text
 from ppt_speech.core.slide_transition import set_advance_after_time
 from ppt_speech.core.tts_client import text_to_mp3
@@ -160,7 +160,7 @@ def _log(on_progress: "ProgressCallback | None", message: str) -> None:
 
 
 @contextmanager
-def _temp_audio_workspace(config: PTSpeechConfig):
+def _temp_audio_workspace(config: PptSpeechConfig):
     """为中间音频文件创建临时工作目录，并在退出时自动清理。
 
     目录选取策略：
@@ -214,7 +214,7 @@ def _temp_audio_workspace(config: PTSpeechConfig):
 def _apply_auto_advance(
     slide: Slide,
     audio_file: Path,
-    config: PTSpeechConfig,
+    config: PptSpeechConfig,
     idx: int,
     *,
     total: int = 0,
@@ -271,7 +271,7 @@ def _apply_auto_advance(
 
 async def process_slides(
     prs: Presentation,
-    config: PTSpeechConfig,
+    config: PptSpeechConfig,
     on_progress: "ProgressCallback | None" = None,
 ) -> None:
     """处理演示文稿中的所有幻灯片，生成并嵌入配音。
@@ -366,7 +366,7 @@ async def process_slides(
 
 
 async def speak_ppt_notes(
-    config: Optional[PTSpeechConfig] = None,
+    config: Optional[PptSpeechConfig] = None,
     on_progress: "ProgressCallback | None" = None,
 ) -> None:
     """PPT 配音处理的顶层入口函数。
@@ -395,7 +395,7 @@ async def speak_ppt_notes(
         OSError: 当文件读写或目录操作失败时。
     """
     if config is None:
-        config = PTSpeechConfig(voice_name="zh-HK-WanLungNeural")
+        config = PptSpeechConfig(voice_name="zh-HK-WanLungNeural")
 
     config.validate()
 

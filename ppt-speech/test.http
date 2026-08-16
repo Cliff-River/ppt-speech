@@ -3,7 +3,7 @@
 ### 前置：启动服务 → uv run ppt-speech-server
 ### 变量
 @host = http://127.0.0.1:8000
-@taskId = 在此粘贴上传返回的 task_id
+@taskId = 22df3859-69d9-4cc1-9192-377efd39822d
 
 
 ### 1. 健康检查（应 200，redis=true）

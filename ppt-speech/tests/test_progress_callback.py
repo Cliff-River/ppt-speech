@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from ppt_speech.config import PTSpeechConfig
+from ppt_speech.config import PptSpeechConfig
 from ppt_speech.pipeline import (
     STAGE_COMPLETED,
     STAGE_EMBEDDING,
@@ -37,7 +37,7 @@ class TestProgressCallback(unittest.IsolatedAsyncioTestCase):
         self.temp_dir = Path(tempfile.mkdtemp())
         # 写入占位 input.pptx 以通过 config.validate() 的文件存在性校验
         (self.temp_dir / "input.pptx").write_bytes(b"fake pptx content")
-        self.config = PTSpeechConfig(
+        self.config = PptSpeechConfig(
             input_dir=self.temp_dir,
             output_dir=self.temp_dir,
             input_filename="input.pptx",

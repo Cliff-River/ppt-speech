@@ -23,7 +23,7 @@ from edge_tts.exceptions import (
 from lxml import etree as lxml_etree
 
 from ppt_speech import (
-    PTSpeechConfig,
+    PptSpeechConfig,
     embed_audio_autoplay,
     get_audio_duration,
     normalize_voice_name,
@@ -45,7 +45,7 @@ class TestPTSpeechConfig(unittest.TestCase):
 
     def test_default_creation(self) -> None:
         """测试默认配置创建。"""
-        config = PTSpeechConfig()
+        config = PptSpeechConfig()
         self.assertEqual(config.input_dir, Path("data"))
         self.assertEqual(config.output_dir, Path("data"))
         self.assertEqual(config.input_filename, "input.pptx")
@@ -59,7 +59,7 @@ class TestPTSpeechConfig(unittest.TestCase):
 
     def test_custom_creation(self) -> None:
         """测试自定义配置创建。"""
-        config = PTSpeechConfig(
+        config = PptSpeechConfig(
             input_dir=Path("input_dir"),
             output_dir=Path("output_dir"),
             input_filename="test.pptx",
@@ -78,7 +78,7 @@ class TestPTSpeechConfig(unittest.TestCase):
 
     def test_input_path_property(self) -> None:
         """测试 input_path 属性。"""
-        config = PTSpeechConfig(
+        config = PptSpeechConfig(
             input_dir=Path("mydata"),
             input_filename="test.pptx",
         )
@@ -86,7 +86,7 @@ class TestPTSpeechConfig(unittest.TestCase):
 
     def test_output_path_property(self) -> None:
         """测试 output_path 属性。"""
-        config = PTSpeechConfig(
+        config = PptSpeechConfig(
             output_dir=Path("out"),
             output_filename="result.pptx",
         )
@@ -95,12 +95,12 @@ class TestPTSpeechConfig(unittest.TestCase):
     @patch("pathlib.Path.exists", return_value=True)
     def test_validate_valid(self, mock_exists: MagicMock) -> None:
         """测试合法配置验证。"""
-        config = PTSpeechConfig()
+        config = PptSpeechConfig()
         config.validate()
 
     def test_validate_invalid_voice(self) -> None:
         """测试无效语音名称验证。"""
-        config = PTSpeechConfig(voice_name="invalid-voice")
+        config = PptSpeechConfig(voice_name="invalid-voice")
         with self.assertRaises(ValueError) as ctx:
             config.validate()
         self.assertIn("语音名称格式错误", str(ctx.exception))
@@ -108,14 +108,14 @@ class TestPTSpeechConfig(unittest.TestCase):
     @patch("pathlib.Path.exists", return_value=True)
     def test_validate_invalid_speech_rate(self, mock_exists: MagicMock) -> None:
         """测试无效语速验证。"""
-        config = PTSpeechConfig(speech_rate="fast")
+        config = PptSpeechConfig(speech_rate="fast")
         with self.assertRaises(ValueError) as ctx:
             config.validate()
         self.assertIn("语速格式错误", str(ctx.exception))
 
     def test_validate_missing_input_file(self) -> None:
         """测试输入文件不存在验证。"""
-        config = PTSpeechConfig(input_dir=Path("nonexistent"))
+        config = PptSpeechConfig(input_dir=Path("nonexistent"))
         with self.assertRaises(FileNotFoundError) as ctx:
             config.validate()
         self.assertIn("输入 PPT 文件不存在", str(ctx.exception))
@@ -124,7 +124,7 @@ class TestPTSpeechConfig(unittest.TestCase):
     def test_validate_boundary_speech_rates(self, mock_exists: MagicMock) -> None:
         """测试边界语速值验证。"""
         for rate in ("+0%", "-0%", "+100%", "-100%", "+999%"):
-            config = PTSpeechConfig(speech_rate=rate)
+            config = PptSpeechConfig(speech_rate=rate)
             config.validate()
 
     @patch("pathlib.Path.exists", return_value=True)
@@ -132,7 +132,7 @@ class TestPTSpeechConfig(unittest.TestCase):
         self, mock_exists: MagicMock
     ) -> None:
         """测试自动翻页延迟为负数时验证失败。"""
-        config = PTSpeechConfig(auto_advance=True, auto_advance_delay=-1.0)
+        config = PptSpeechConfig(auto_advance=True, auto_advance_delay=-1.0)
         with self.assertRaises(ValueError) as ctx:
             config.validate()
         self.assertIn("自动翻页延迟时间不能为负数", str(ctx.exception))
@@ -534,7 +534,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self) -> None:
         self.temp_dir = Path(tempfile.mkdtemp())
-        self.config = PTSpeechConfig(
+        self.config = PptSpeechConfig(
             input_dir=self.temp_dir,
             output_dir=self.temp_dir,
             input_filename="input.pptx",
@@ -706,7 +706,7 @@ class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
         mock_text_to_mp3.return_value = True
 
         # 不指定 temp_audio_dir，验证默认走系统临时目录（tempfile）路径
-        config = PTSpeechConfig(
+        config = PptSpeechConfig(
             input_dir=self.temp_dir,
             output_dir=self.temp_dir,
             input_filename="input.pptx",
@@ -850,7 +850,7 @@ class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _make_config(self, **overrides) -> PTSpeechConfig:
+    def _make_config(self, **overrides) -> PptSpeechConfig:
         defaults = dict(
             input_dir=self.temp_dir,
             output_dir=self.temp_dir,
@@ -860,7 +860,7 @@ class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
             auto_advance_delay=2.0,
         )
         defaults.update(overrides)
-        return PTSpeechConfig(**defaults)
+        return PptSpeechConfig(**defaults)
 
     @patch("ppt_speech.core.pipeline.set_advance_after_time")
     @patch("ppt_speech.core.pipeline.get_audio_duration", return_value=5.0)
@@ -1000,7 +1000,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         mock_prs = MagicMock()
         mock_presentation.return_value = mock_prs
 
-        config = PTSpeechConfig(
+        config = PptSpeechConfig(
             input_dir=self.temp_dir,
             output_dir=self.temp_dir,
             input_filename="input.pptx",
@@ -1024,10 +1024,10 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         mock_presentation.return_value = mock_prs
 
         with patch.object(
-            PTSpeechConfig, "validate", return_value=None
+            PptSpeechConfig, "validate", return_value=None
         ):
             with patch.object(
-                PTSpeechConfig,
+                PptSpeechConfig,
                 "input_path",
                 new_callable=PropertyMock,
                 return_value=self.input_path,
@@ -1039,7 +1039,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
     async def test_main_propagates_validation_error(self) -> None:
         """测试 main 函数传播验证错误。"""
-        config = PTSpeechConfig(
+        config = PptSpeechConfig(
             input_dir=Path("nonexistent_dir"),
         )
         with self.assertRaises(FileNotFoundError):
@@ -1058,7 +1058,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
 
     def test_config_paths_combined_correctly(self) -> None:
         """测试配置路径正确组合。"""
-        config = PTSpeechConfig(
+        config = PptSpeechConfig(
             input_dir=Path("inputs"),
             output_dir=Path("outputs"),
             input_filename="presentation.pptx",
@@ -1109,7 +1109,7 @@ class TestIntegration(unittest.IsolatedAsyncioTestCase):
         input_path = self.temp_dir / "input.pptx"
         input_path.write_bytes(b"fake")
 
-        config = PTSpeechConfig(
+        config = PptSpeechConfig(
             input_dir=self.temp_dir,
             output_dir=self.temp_dir,
             input_filename="input.pptx",

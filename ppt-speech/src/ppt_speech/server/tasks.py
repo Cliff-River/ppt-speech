@@ -21,7 +21,7 @@ from typing import Any, Optional
 from pptx import Presentation
 from redis.asyncio import Redis
 
-from ppt_speech.config import PTSpeechConfig
+from ppt_speech.config import PptSpeechConfig
 from ppt_speech.pipeline import process_slides
 from ppt_speech.server import redis_client
 from ppt_speech.server.config import ServerConfig
@@ -144,9 +144,9 @@ class TaskManager:
 
     def _build_config(
         self, task_dir: Path, params: dict[str, Any]
-    ) -> PTSpeechConfig:
+    ) -> PptSpeechConfig:
         """根据任务子目录与参数构建 PTSpeechConfig。"""
-        return PTSpeechConfig(
+        return PptSpeechConfig(
             input_dir=task_dir,
             output_dir=task_dir,
             input_filename=_INPUT_FILENAME,
@@ -164,7 +164,7 @@ class TaskManager:
     async def run_task(
         self,
         task_id: str,
-        config: PTSpeechConfig,
+        config: PptSpeechConfig,
         input_filename: str,
     ) -> None:
         """执行单个任务的后台处理（在独立 asyncio 任务中运行）。

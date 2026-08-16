@@ -11,7 +11,7 @@ import argparse
 import asyncio
 from pathlib import Path
 
-from ppt_speech.core import PTSpeechConfig, speak_ppt_notes
+from ppt_speech.core import PptSpeechConfig, speak_ppt_notes
 
 
 def _split_path(file_path: str) -> tuple[Path, str]:
@@ -79,7 +79,7 @@ def main() -> None:
     input_dir, input_filename = _split_path(args.input)
     output_dir, output_filename = _split_path(args.output)
 
-    config = PTSpeechConfig(
+    config = PptSpeechConfig(
         input_dir=input_dir,
         input_filename=input_filename,
         output_dir=output_dir,
