@@ -69,10 +69,10 @@ HTTP 上传 `.pptx` 文件，服务端在后台运行「备注提取 → TTS 合
 ## 组件分层
 
 ```
-┌──────────────┐   HTTP/SSE    ┌──────────────────────────────────────┐
-│  client.py   │ ────────────▶ │         FastAPI 服务端                │
-│ (httpx+sse)  │ ◀──────────── │  server/app.py  路由 + lifespan       │
-└──────────────┘   结果下载    │   ├─ server/tasks.py    TaskManager   │
+┌──────────────────┐   HTTP/SSE    ┌──────────────────────────────────────┐
+│ src/client.py    │ ────────────▶ │         FastAPI 服务端                │
+│  (httpx+sse)     │ ◀──────────── │  server/app.py  路由 + lifespan       │
+└──────────────────┘   结果下载    │   ├─ server/tasks.py    TaskManager   │
                               │   ├─ server/progress.py ProgressReporter│
                               │   ├─ server/sse.py      event_stream   │
                               │   └─ server/redis_client.py           │

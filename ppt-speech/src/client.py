@@ -9,7 +9,7 @@
 用法示例
 ========
 
-    uv run python client.py --server http://127.0.0.1:8000 \
+    uv run python src/client.py --server http://127.0.0.1:8000 \
         --input ./data/input.pptx \
         --voice-name zh-CN-XiaoxiaoNeural \
         --auto-advance --output ./out.pptx

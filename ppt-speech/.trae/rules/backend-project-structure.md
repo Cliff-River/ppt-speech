@@ -1,4 +1,4 @@
-﻿---
+---
 alwaysApply: false
 description: 
 ---
@@ -11,10 +11,11 @@ description:
 ```
 ppt-speech/
 ├── src/                    # Python 包源码（可复用核心库 + 可选服务端）
+│   ├── client.py           # 示例客户端脚本（依赖 [client] extra）
+│   └── ppt_speech/         # Python 包（core/server/cli 子包）
 ├── tests/                  # unittest 测试
 ├── docs/                   # 架构/API/部署/测试等文档
 ├── data/                   # 本地输入/输出示例（已 gitignore，不提交）
-├── client.py               # 示例客户端脚本（依赖 [client] extra）
 ├── test.http               # REST Client 手工测试用例
 ├── voices.json             # Edge TTS 语音列表缓存（可再生成）
 ├── pyproject.toml          # 依赖与脚本入口（uv/PEP621）

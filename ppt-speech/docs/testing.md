@@ -64,7 +64,7 @@ $env:REDIS_HOST="192.168.79.160"
 uv run ppt-speech-server
 
 # 2. 跑客户端
-uv run python client.py --server http://127.0.0.1:8000 `
+uv run python src/client.py --server http://127.0.0.1:8000 `
   --input ./data/input.pptx --output ./out.pptx
 
 # 3. 手动观察 SSE

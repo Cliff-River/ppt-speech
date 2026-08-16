@@ -67,6 +67,7 @@
 ```
 ppt-speech/
 ├── src/
+│   ├── client.py                  # 示例客户端（上传 + SSE + 下载，需 [client] extra）
 │   └── ppt_speech/
 │       ├── __init__.py            # 包入口：包级文档 + 完整公共 API + main()
 │       ├── __main__.py            # 支持 python -m ppt_speech 运行完整流程
@@ -117,7 +118,6 @@ ppt-speech/
 ├── data/                          # 输入/输出 PPT 文件目录（已 gitignore）
 │   ├── input.pptx
 │   └── output.pptx
-├── client.py                      # 示例客户端（上传 + SSE + 下载，需 [client] extra）
 ├── test.http                      # REST Client 测试用例
 ├── voices.json                    # 可用语音列表缓存（由 python -m ppt_speech.voices 生成）
 ├── pyproject.toml                 # 项目元数据与依赖声明（含 server/client/test extras）
@@ -279,7 +279,7 @@ uv pip install -e ".[server,client]"
 uv run ppt-speech-server
 
 # 3. 另起终端，运行客户端（实时查看进度 + 下载结果）
-uv run python client.py \
+uv run python src/client.py \
   --server http://127.0.0.1:8000 \
   --input ./data/input.pptx \
   --voice-name zh-CN-XiaoxiaoNeural \

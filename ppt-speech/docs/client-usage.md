@@ -10,7 +10,7 @@
 
 ## client.py
 
-`client.py`（项目根）模拟完整客户端流程：上传 → SSE 实时进度 → 下载结果。
+`src/client.py`（src 目录下）模拟完整客户端流程：上传 → SSE 实时进度 → 下载结果。
 
 ### 命令行参数
 
@@ -27,7 +27,7 @@
 ### 示例
 
 ```powershell
-uv run python client.py `
+uv run python src/client.py `
   --server http://127.0.0.1:8000 `
   --input ./data/input.pptx `
   --voice-name zh-CN-XiaoxiaoNeural `

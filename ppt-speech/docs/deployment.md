@@ -18,7 +18,7 @@ uv pip install -e ".[server,client,test]"
 | 组 | 包 | 用途 |
 | --- | --- | --- |
 | `server` | fastapi, uvicorn[standard], redis, python-multipart | 运行 HTTP 服务 |
-| `client` | httpx, httpx-sse | 运行 `client.py` |
+| `client` | httpx, httpx-sse | 运行 `src/client.py` |
 | `test` | coverage, httpx, fakeredis | 运行测试 |
 
 > 核心库（`ppt-speech` CLI）仅需核心依赖，不受 server/client 影响。
