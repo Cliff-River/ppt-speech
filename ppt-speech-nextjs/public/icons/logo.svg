@@ -1,0 +1,29 @@
+<svg
+    aria-hidden="true"
+    fill="none"
+    viewBox="0 0 48 48"
+    xmlns="http://www.w3.org/2000/svg"
+>
+    <rect rx="10" ry="10" width="48" height="48" fill="url(#logo-gradient)" />
+    <path
+    d="M14 34V14l6 6 6-6v20"
+    stroke="#ffffff"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    />
+    <circle cx="32" cy="24" r="6" stroke="#ffffff" strokeWidth="3" />
+    <path
+    d="M32 20v4.5l3 2.5"
+    stroke="#ffffff"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    />
+    <defs>
+    <linearGradient id="logo-gradient" x1="0" x2="48" y1="0" y2="48">
+        <stop offset="0%" stopColor="#10b981" />
+        <stop offset="100%" stopColor="#059669" />
+    </linearGradient>
+    </defs>
+</svg>
