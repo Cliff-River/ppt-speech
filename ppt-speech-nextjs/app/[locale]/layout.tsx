@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "../globals.css";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
+import NavigationBar from "@/components/NavigationBar";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");
@@ -19,6 +20,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale}>
       <body>
         <NextIntlClientProvider>
+          <NavigationBar />
           {children}
         </NextIntlClientProvider>
       </body>
