@@ -2,7 +2,7 @@
  * 调用后端语音 API 的工具函数。
  */
 
-import type { ApiError, ListVoicesResponse, Voice } from "@/lib/types/voice";
+import type { ApiError } from "@/lib/types/voice";
 
 /**
  * 后端 API 基础路径。
@@ -16,12 +16,10 @@ export const API_BASE_URL =
       .NEXT_PUBLIC_API_BASE_URL) ||
   "";
 
-const VOICES_ENDPOINT = "/api/v1/voices";
-
 /**
  * 统一的请求封装：处理非 2xx 响应，解析 JSON，并返回结构化错误。
  */
-async function request<T>(
+export async function request<T>(
   input: string,
   init?: RequestInit,
 ): Promise<{ data: T; ok: true } | { error: ApiError; ok: false }> {
@@ -64,22 +62,4 @@ async function request<T>(
       },
     };
   }
-}
-
-/**
- * 拉取后端可用语音列表。
- *
- * @see {@link https://developer.mozilla.org/docs/Web/API/fetch fetch}
- */
-export async function fetchVoices(
-  options?: RequestInit,
-): Promise<{ data: Voice[]; ok: true } | { error: ApiError; ok: false }> {
-  const url = `${API_BASE_URL}${VOICES_ENDPOINT}`;
-  const result = await request<ListVoicesResponse>(url, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    ...options,
-  });
-  if (!result.ok) return result;
-  return { ok: true, data: result.data.voices ?? [] };
 }

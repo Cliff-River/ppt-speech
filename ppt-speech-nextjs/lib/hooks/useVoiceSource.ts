@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchVoices } from "@/lib/api/voice";
+import { fetchVoices } from "@/lib/api/voice.api";
 import type { ApiError, Voice } from "@/lib/types/voice";
 
 export interface UseVoiceSourceOptions {
