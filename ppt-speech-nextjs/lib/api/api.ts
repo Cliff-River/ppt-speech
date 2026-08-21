@@ -25,7 +25,7 @@ export async function request<T>(
 ): Promise<{ data: T; ok: true } | { error: ApiError; ok: false }> {
   try {
     const response = await fetch(input, init);
-    const contentType = response.headers.get("content-type") ?? "";
+    const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
     const isJson = contentType.includes("application/json");
 
     if (!response.ok) {

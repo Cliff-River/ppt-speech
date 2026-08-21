@@ -16,10 +16,14 @@ export async function fetchVoices(
   options?: RequestInit,
 ): Promise<{ data: Voice[]; ok: true } | { error: ApiError; ok: false }> {
   const url = `${API_BASE_URL}${VOICES_ENDPOINT}`;
+  const mergedHeaders: HeadersInit = {
+    Accept: "application/json",
+    ...(options?.headers as Record<string, string> | undefined),
+  };
   const result = await request<ListVoicesResponse>(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
     ...options,
+    headers: mergedHeaders,
   });
   if (!result.ok) return result;
   return { ok: true, data: result.data.voices ?? [] };
