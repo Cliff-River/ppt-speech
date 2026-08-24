@@ -38,7 +38,7 @@ class ServerConfig:
         cleanup_interval_seconds: 磁盘清理协程扫描间隔（秒）。
     """
 
-    redis_host: str = "192.168.79.160"
+    redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
     host: str = "0.0.0.0"
@@ -60,7 +60,7 @@ class ServerConfig:
         max_upload_mb = os.environ.get("MAX_UPLOAD_MB")
 
         return cls(
-            redis_host=os.environ.get("REDIS_HOST", "192.168.79.160"),
+            redis_host=os.environ.get("REDIS_HOST", "localhost"),
             redis_port=int(os.environ.get("REDIS_PORT", "6379")),
             redis_db=int(os.environ.get("REDIS_DB", "0")),
             host=os.environ.get("HOST", "0.0.0.0"),
