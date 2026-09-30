@@ -81,9 +81,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--auto-advance",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
-        help="启用自动翻页（按音频时长自动设置翻页时间）",
+        help="启用自动翻页（按音频时长自动设置翻页时间），用 --no-auto-advance 关闭（默认启用）",
     )
     return parser
 
