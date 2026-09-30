@@ -9,9 +9,31 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from pathlib import Path
 
 from ppt_speech.core import PptSpeechConfig, speak_ppt_notes
+
+
+def _normalize_argv(argv: list[str]) -> list[str]:
+    """把 ``--rate "-10%"`` 这类以 ``-`` 开头的值改写为 ``--rate=-10%``。
+
+    argparse 默认会把以 ``-`` 开头的下一个 token 当作选项而非值，导致
+    形如 ``--rate "-10%"`` 的调用报 ``expected one argument`` 错误。这里
+    仅对 ``-r`` / ``--rate`` 做等号化改写，让负数语速也能用空格语法传入。
+    """
+    rate_flags = {"-r", "--rate"}
+    result: list[str] = []
+    i = 0
+    while i < len(argv):
+        token = argv[i]
+        if token in rate_flags and i + 1 < len(argv):
+            result.append(f"{token}={argv[i + 1]}")
+            i += 2
+        else:
+            result.append(token)
+            i += 1
+    return result
 
 
 def _split_path(file_path: str) -> tuple[Path, str]:
@@ -74,7 +96,7 @@ def main() -> None:
     ``python -m ppt_speech``（见 :mod:`ppt_speech.__main__`）触发。
     """
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(_normalize_argv(sys.argv[1:]))
 
     input_dir, input_filename = _split_path(args.input)
     output_dir, output_filename = _split_path(args.output)
