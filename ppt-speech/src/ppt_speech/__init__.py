@@ -40,9 +40,11 @@ OOXML 时序，使其在幻灯片进入时自动播放。同时根据每页音�
 
 命令行：
 
-- ``uv run ppt-speech``（等价于 ``uv run python -m ppt_speech``）：以默认配置
-  运行完整配音流程。
-- ``uv run python -m ppt_speech.cli.voices``：刷新可用语音列表到 ``voices.json``。
+- ``uv run ppt-speech create``：读取 PPT 备注，TTS 配音并嵌入音频，输出新 PPT
+  （等价于 ``uv run python -m ppt_speech create``；省略子命令时默认按 create
+  处理，向后兼容旧版平铺式参数）。
+- ``uv run ppt-speech voice``：检索可用音色列表，支持关键词搜索与多条件过滤。
+- ``uv run ppt-speech voice --refresh``：联网刷新音色缓存 ``voices.json``。
 
 注意事项
 ========

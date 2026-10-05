@@ -1,8 +1,17 @@
 """命令行主入口模块。
 
-提供 ``main()`` 函数作为控制台脚本入口，支持多种参数以自定义
-PPT 配音流程。供 ``pyproject.toml`` 中声明的 ``ppt-speech``
-控制台脚本调用（``ppt-speech = "ppt_speech.cli:main"``）。
+提供 ``main()`` 函数作为控制台脚本入口，按子命令分发：
+
+- ``create`` — 读取 PPT 备注，TTS 配音并嵌入音频，输出新 PPT（见
+  :mod:`ppt_speech.cli.create`）。
+- ``voice`` — 检索可用音色列表，支持关键词搜索与多条件过滤（见
+  :mod:`ppt_speech.cli.voices`）。
+
+供 ``pyproject.toml`` 中声明的 ``ppt-speech`` 控制台脚本调用
+（``ppt-speech = "ppt_speech.cli:main"``）。
+
+向后兼容：旧版平铺式调用（如 ``ppt-speech -i a.pptx -o b.pptx``）
+未显式指定子命令时，自动按 ``create`` 处理。
 """
 
 from __future__ import annotations
@@ -10,9 +19,17 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from pathlib import Path
 
-from ppt_speech.core import PptSpeechConfig, speak_ppt_notes
+from edge_tts.exceptions import EdgeTTSException
+
+from ppt_speech.cli import create as create_cmd
+from ppt_speech.cli import voices as voices_cmd
+
+#: 顶层支持的子命令集合。
+SUBCOMMANDS = ("create", "voice")
+
+#: 视为顶层帮助请求、不做 create 注入的首个参数。
+_TOP_HELP_FLAGS = {"-h", "--help"}
 
 
 def _normalize_argv(argv: list[str]) -> list[str]:
@@ -36,80 +53,79 @@ def _normalize_argv(argv: list[str]) -> list[str]:
     return result
 
 
-def _split_path(file_path: str) -> tuple[Path, str]:
-    """将文件路径分离为目录和文件名。
+def _ensure_subcommand(argv: list[str]) -> list[str]:
+    """为兼容旧版平铺式调用补全缺失的子命令。
 
     Args:
-        file_path: 文件路径字符串，如 ``"data/input.pptx"``。
+        argv: 原始参数列表（不含程序名）。
 
     Returns:
-        ``(目录路径, 文件名)`` 元组。
+        补全后的参数列表。首个参数已是子命令或为帮助请求时原样返回；
+        否则视为旧版 ``create`` 用法，在开头注入 ``create``。
     """
-    p = Path(file_path)
-    return p.parent, p.name
+    if not argv or argv[0] in SUBCOMMANDS or argv[0] in _TOP_HELP_FLAGS:
+        return argv
+    return ["create", *argv]
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构建命令行参数解析器。
+    """构建顶层命令行参数解析器（含子命令）。
 
     Returns:
-        配置完善的 ArgumentParser 实例。
+        配置完善的 ArgumentParser 实例，子命令处理器挂在
+        ``args.handler`` 上。
     """
     parser = argparse.ArgumentParser(
         prog="ppt-speech",
-        description="PowerPoint 自动配音工具",
+        description="PowerPoint 自动配音工具：读取 PPT 备注生成语音并嵌入幻灯片。",
+        epilog=(
+            "子命令：\n"
+            "  create  读取 PPT，TTS 配音，嵌入音频，输出新 PPT\n"
+            "  voice   检索音色列表、关键词搜索音色（不碰 PPT 文件）\n"
+            "\n"
+            "示例：\n"
+            "  ppt-speech create -i data/input.pptx -o data/output.pptx\n"
+            "  ppt-speech voice -l zh-CN -g female\n"
+            "\n"
+            "向后兼容：省略子命令时默认按 create 处理，\n"
+            "如 `ppt-speech -i data/input.pptx` 等价于 "
+            "`ppt-speech create -i data/input.pptx`。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
-        "-i", "--input",
-        default="data/input.pptx",
-        help="输入 PPT 文件路径（默认: data/input.pptx）",
-    )
-    parser.add_argument(
-        "-o", "--output",
-        default="data/output.pptx",
-        help="输出 PPT 文件路径（默认: data/output.pptx）",
-    )
-    parser.add_argument(
-        "-v", "--voice",
-        default="zh-CN-XiaoxiaoNeural",
-        help="TTS 语音名称（默认: zh-CN-XiaoxiaoNeural）",
-    )
-    parser.add_argument(
-        "-r", "--rate",
-        default="+0%",
-        help="语速调整，如 +10%% 或 -5%%（默认: +0%%）",
-    )
-    parser.add_argument(
-        "--auto-advance",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="启用自动翻页（按音频时长自动设置翻页时间），用 --no-auto-advance 关闭（默认启用）",
-    )
+    subparsers = parser.add_subparsers(dest="command", metavar="{create,voice}")
+    create_cmd.register(subparsers)
+    voices_cmd.register(subparsers)
     return parser
 
 
 def main() -> None:
-    """控制台入口：解析参数并运行配音流程。
+    """控制台入口：解析参数并分发到对应子命令。
 
     供 ``pyproject.toml`` 中声明的 ``ppt-speech`` 控制台脚本调用
     （``ppt-speech = "ppt_speech.cli:main"``），亦可经由
     ``python -m ppt_speech``（见 :mod:`ppt_speech.__main__`）触发。
+
+    Raises:
+        SystemExit: 参数错误时以退出码 2 终止；业务错误以 1 终止；
+            用户中断（Ctrl+C）以 130 终止。
     """
     parser = build_parser()
-    args = parser.parse_args(_normalize_argv(sys.argv[1:]))
+    argv = _normalize_argv(_ensure_subcommand(sys.argv[1:]))
+    args = parser.parse_args(argv)
 
-    input_dir, input_filename = _split_path(args.input)
-    output_dir, output_filename = _split_path(args.output)
+    if getattr(args, "handler", None) is None:
+        # 未指定任何子命令（如裸调用 `ppt-speech`）时打印顶层帮助。
+        parser.print_help()
+        return
 
-    config = PptSpeechConfig(
-        input_dir=input_dir,
-        input_filename=input_filename,
-        output_dir=output_dir,
-        output_filename=output_filename,
-        voice_name=args.voice,
-        speech_rate=args.rate,
-        auto_advance=args.auto_advance,
-    )
-    config.validate()
-
-    asyncio.run(speak_ppt_notes(config))
+    try:
+        result = args.handler(args)
+        if asyncio.iscoroutine(result):
+            asyncio.run(result)
+    except KeyboardInterrupt:
+        print("\n已取消。", file=sys.stderr)
+        sys.exit(130)
+    except (ValueError, FileNotFoundError, EdgeTTSException, OSError) as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        sys.exit(1)

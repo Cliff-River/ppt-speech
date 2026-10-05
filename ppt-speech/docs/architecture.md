@@ -38,8 +38,9 @@ HTTP 上传 `.pptx` 文件，服务端在后台运行「备注提取 → TTS 合
 | --- | --- |
 | `cli/__init__.py` | 暴露 `main()` 入口 |
 | `cli/__main__.py` | 支持 `python -m ppt_speech.cli` 运行 |
-| `cli/main.py` | CLI 参数解析（argparse）与入口实现 |
-| `cli/voices.py` | 刷新可用语音列表到 `voices.json` |
+| `cli/main.py` | 顶层参数解析（argparse）与子命令分发 |
+| `cli/create.py` | `create` 子命令：读取 PPT 备注，TTS 配音并嵌入音频，输出新 PPT |
+| `cli/voices.py` | `voice` 子命令：音色列表检索/搜索/多条件过滤；维护 `voices.json` 缓存 |
 
 ### server 子包 — 后端服务
 
