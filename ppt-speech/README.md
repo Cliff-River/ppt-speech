@@ -199,21 +199,22 @@ ppt-speech/
 
 ### 快速开始
 
-1. 将待处理的演示文稿放入 `data/` 目录并命名为 `input.pptx`（或在配置中指定其他路径）。
-2. 确保每张需要配音的幻灯片已在“备注”区填写讲稿文字。
-3. 运行：
+1. 准备好待处理的演示文稿（例如 `data/input.pptx`，路径可任意指定），并确保每张需要配音的幻灯片已在“备注”区填写讲稿文字。
+2. 通过 `create` 子命令显式指定输入与输出路径运行：
 
    ```bash
-   uv run python -m ppt_speech
+   uv run ppt-speech create -i data/input.pptx -o data/output.pptx
    ```
 
-   或直接调用控制台入口：
+   等价写法：
 
    ```bash
-   uv run ppt-speech
+   uv run python -m ppt_speech create -i data/input.pptx -o data/output.pptx
    ```
 
-4. 处理完成后，配音后的文件将保存为 `data/output.pptx`，控制台会输出每页的处理进度：
+   > 不带任何参数运行 `ppt-speech`，或 `create` 缺少必填的 `-i`/`-o` 时，只会显示帮助，不会执行配音。
+
+3. 处理完成后，配音后的文件将保存为 `-o` 指定的路径（上例为 `data/output.pptx`），控制台会输出每页的处理进度：
 
    ```text
    【第1页】生成语音：大家好，今天我们来介绍...

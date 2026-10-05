@@ -85,15 +85,16 @@ __all__ = [
 
 
 def main() -> None:
-    """控制台入口：以默认配置运行完整配音流程。
+    """控制台入口（历史重导出，直接转发到 :func:`ppt_speech.cli.main.main`）。
 
-    供 ``pyproject.toml`` 中声明的 ``ppt-speech`` 控制台脚本调用
-    （``ppt-speech = "ppt_speech:main"``），亦可经由
-    ``python -m ppt_speech``（见 :mod:`ppt_speech.__main__`）触发。
+    当前控制台脚本声明为 ``ppt-speech = "ppt_speech.cli:main"``，本函数
+    仅供旧引用兼容；亦可经由 ``python -m ppt_speech``
+    （见 :mod:`ppt_speech.__main__`）触发。
 
-    当前以 :class:`PTSpeechConfig` 默认值运行（读取 ``data/input.pptx``，
-    输出 ``data/output.pptx``）；如需自定义路径、语音或语速，请改用
-    :func:`speak_ppt_notes` 显式传入配置对象。
+    不带参数时打印顶层帮助；``create`` 子命令缺少必填的 ``-i``/``-o``
+    时打印该子命令帮助，不再以任何默认路径自动执行配音流程。如需以库
+    方式自定义路径、语音或语速，请使用 :func:`speak_ppt_notes` 显式传入
+    :class:`PTSpeechConfig` 配置对象。
     """
 
     from ppt_speech.cli.main import main as cli_main

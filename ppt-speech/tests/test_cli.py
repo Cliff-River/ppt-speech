@@ -4,15 +4,23 @@
 音色过滤与表格渲染，使用 Python 标准 unittest 框架。
 """
 
+import io
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from ppt_speech.cli.main import _ensure_subcommand, _normalize_argv, build_parser
+from ppt_speech.cli.main import (
+    _ensure_subcommand,
+    _normalize_argv,
+    build_parser,
+    main,
+)
 from ppt_speech.cli.voices import filter_voices, format_voices_table, load_voices
 
 
@@ -64,8 +72,9 @@ class CreateSubcommandTest(unittest.TestCase):
 
     def test_defaults_preserved(self):
         args = _parse(["create"])
-        self.assertEqual(args.input, "data/input.pptx")
-        self.assertEqual(args.output, "data/output.pptx")
+        # -i/-o 不再有隐式默认路径，缺省时由 main 打印帮助而非执行。
+        self.assertIsNone(args.input)
+        self.assertIsNone(args.output)
         self.assertEqual(args.voice, "zh-CN-XiaoxiaoNeural")
         self.assertEqual(args.rate, "+0%")
         self.assertTrue(args.auto_advance)
@@ -87,7 +96,11 @@ class CreateSubcommandTest(unittest.TestCase):
         self.assertEqual(args.rate, "-10%")
 
     def test_run_raises_on_missing_input(self):
-        args = _parse(["create", "-i", "definitely/missing.pptx"])
+        args = _parse([
+            "create",
+            "-i", "definitely/missing.pptx",
+            "-o", "definitely/out.pptx",
+        ])
         with self.assertRaises(FileNotFoundError):
             args.handler(args)
 
@@ -202,6 +215,43 @@ class TopLevelParserTest(unittest.TestCase):
     def test_bare_invocation_has_no_handler(self):
         args = build_parser().parse_args([])
         self.assertIsNone(getattr(args, "handler", None))
+
+    def test_bare_main_prints_help_without_running_create(self):
+        # 裸调用 `ppt-speech` 必须打印顶层帮助并正常返回（退出码 0），
+        # 不得回退执行 create —— 否则默认输入文件缺失会 SystemExit(1)。
+        with (
+            mock.patch.object(sys, "argv", ["ppt-speech"]),
+            redirect_stdout(io.StringIO()) as buf,
+        ):
+            main()
+        output = buf.getvalue()
+        self.assertIn("usage: ppt-speech", output)
+        self.assertIn("create", output)
+        self.assertIn("voice", output)
+
+    def test_bare_create_prints_subcommand_help(self):
+        # `ppt-speech create` 不带 -i/-o 时打印 create 帮助并正常返回，
+        # 不得回退到任何默认路径执行配音流程。
+        with (
+            mock.patch.object(sys, "argv", ["ppt-speech", "create"]),
+            redirect_stdout(io.StringIO()) as buf,
+        ):
+            main()
+        output = buf.getvalue()
+        self.assertIn("usage: ppt-speech create", output)
+        self.assertIn("-i", output)
+        self.assertIn("-o", output)
+
+    def test_partial_create_prints_subcommand_help(self):
+        # 只给 -i 不给 -o 同样视为参数不完整，打印 create 帮助。
+        with (
+            mock.patch.object(
+                sys, "argv", ["ppt-speech", "create", "-i", "a.pptx"]
+            ),
+            redirect_stdout(io.StringIO()) as buf,
+        ):
+            main()
+        self.assertIn("usage: ppt-speech create", buf.getvalue())
 
 
 if __name__ == "__main__":

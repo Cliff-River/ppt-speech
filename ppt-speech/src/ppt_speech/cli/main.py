@@ -10,8 +10,9 @@
 供 ``pyproject.toml`` 中声明的 ``ppt-speech`` 控制台脚本调用
 （``ppt-speech = "ppt_speech.cli:main"``）。
 
-向后兼容：旧版平铺式调用（如 ``ppt-speech -i a.pptx -o b.pptx``）
-未显式指定子命令时，自动按 ``create`` 处理。
+不带任何参数运行（裸调用）时打印顶层帮助，不执行任何配音流程；
+旧版平铺式调用（如 ``ppt-speech -i a.pptx -o b.pptx``）未显式指定
+子命令时，自动按 ``create`` 处理。
 """
 
 from __future__ import annotations
@@ -60,8 +61,9 @@ def _ensure_subcommand(argv: list[str]) -> list[str]:
         argv: 原始参数列表（不含程序名）。
 
     Returns:
-        补全后的参数列表。首个参数已是子命令或为帮助请求时原样返回；
-        否则视为旧版 ``create`` 用法，在开头注入 ``create``。
+        补全后的参数列表。空参数（裸调用，由 ``main`` 打印顶层帮助）、
+        首个参数已是子命令或为帮助请求时原样返回；否则视为旧版
+        ``create`` 用法，在开头注入 ``create``。
     """
     if not argv or argv[0] in SUBCOMMANDS or argv[0] in _TOP_HELP_FLAGS:
         return argv
@@ -87,9 +89,12 @@ def build_parser() -> argparse.ArgumentParser:
             "  ppt-speech create -i data/input.pptx -o data/output.pptx\n"
             "  ppt-speech voice -l zh-CN -g female\n"
             "\n"
-            "向后兼容：省略子命令时默认按 create 处理，\n"
-            "如 `ppt-speech -i data/input.pptx` 等价于 "
-            "`ppt-speech create -i data/input.pptx`。"
+            "不带任何参数直接运行 `ppt-speech` 将显示本帮助，不会执行配音；\n"
+            "`ppt-speech create` 缺少必填的 -i/-o 时同样只显示 create 帮助。\n"
+            "\n"
+            "向后兼容：以旧版平铺选项开头（如 -i、-o）时自动按 create\n"
+            "处理，如 `ppt-speech -i a.pptx -o b.pptx` 等价于 "
+            "`ppt-speech create -i a.pptx -o b.pptx`。"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -117,6 +122,12 @@ def main() -> None:
     if getattr(args, "handler", None) is None:
         # 未指定任何子命令（如裸调用 `ppt-speech`）时打印顶层帮助。
         parser.print_help()
+        return
+
+    if getattr(args, "command", None) == "create" and not (args.input and args.output):
+        # `create` 不再提供隐式默认路径：缺少必填的 -i/-o 时打印
+        # create 子命令帮助，而不是回退执行 data/input.pptx。
+        args.subparser.print_help()
         return
 
     try:

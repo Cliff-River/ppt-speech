@@ -43,20 +43,22 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         epilog=(
             "示例：\n"
             "  ppt-speech create -i data/input.pptx -o data/output.pptx\n"
-            "  ppt-speech create -v zh-CN-XiaoxiaoNeural -r +10%\n"
-            "  ppt-speech create --no-auto-advance"
+            "  ppt-speech create -i a.pptx -o b.pptx -v zh-CN-XiaoxiaoNeural -r +10%\n"
+            "  ppt-speech create -i a.pptx -o b.pptx --no-auto-advance\n"
+            "\n"
+            "不带 -i/-o 直接运行 `ppt-speech create` 将显示本帮助，不会执行配音。"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "-i", "--input",
-        default="data/input.pptx",
-        help="输入 PPT 文件路径（默认: data/input.pptx）",
+        metavar="FILE",
+        help="输入 PPT 文件路径（必填）",
     )
     parser.add_argument(
         "-o", "--output",
-        default="data/output.pptx",
-        help="输出 PPT 文件路径（默认: data/output.pptx）",
+        metavar="FILE",
+        help="输出 PPT 文件路径（必填）",
     )
     parser.add_argument(
         "-v", "--voice",
@@ -74,7 +76,8 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=True,
         help="启用自动翻页（按音频时长自动设置翻页时间），用 --no-auto-advance 关闭（默认启用）",
     )
-    parser.set_defaults(handler=run)
+    # subparser 随参数带出，供 main 在缺少必填路径时打印本子命令帮助。
+    parser.set_defaults(handler=run, subparser=parser)
 
 
 def run(args: argparse.Namespace) -> None:

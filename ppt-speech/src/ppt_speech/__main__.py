@@ -1,8 +1,8 @@
-"""支持 ``python -m ppt_speech`` 直接运行完整配音流程。
+"""支持 ``python -m ppt_speech`` 调用命令行入口。
 
 等价于控制台脚本 ``ppt-speech``（见 ``pyproject.toml`` 与
-:func:`ppt_speech.main`）：以 :class:`~ppt_speech.core.config.PTSpeechConfig`
-默认配置调用 :func:`~ppt_speech.core.pipeline.speak_ppt_notes`。
+:func:`ppt_speech.cli.main.main`）：不带任何参数时打印顶层帮助，
+传入 ``create`` / ``voice`` 子命令时执行对应流程。
 """
 
 from ppt_speech.cli import main
