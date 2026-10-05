@@ -13,6 +13,8 @@ from __future__ import annotations
 import asyncio
 import json
 
+import anyio
+
 from ppt_speech.core.tts_client import get_voices_list
 
 
@@ -27,8 +29,8 @@ async def refresh_voices(output_path: str = "voices.json") -> None:
         OSError: 当 JSON 文件无法写入时。
     """
     voices = await get_voices_list()
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(voices, f, ensure_ascii=False, indent=4)
+    async with await anyio.open_file(output_path, "w", encoding="utf-8") as f:
+        await f.write(json.dumps(voices, ensure_ascii=False, indent=4))
 
 
 if __name__ == "__main__":
