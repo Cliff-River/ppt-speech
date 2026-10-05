@@ -42,6 +42,23 @@ def set_advance_after_time(slide: Slide, delay_seconds: float) -> None:
     _set_adv_tm(slide._element, delay_ms)
 
 
+def clear_advance_after_time(slide: Slide) -> bool:
+    """清除幻灯片的自动翻页时间（``advTm``）。
+
+    用于重复配音时移除旧的翻页定时：仅删除 ``advTm`` 属性，若
+    ``<p:transition>`` 因此成为无任何属性与子元素的空元素（即当初仅为
+    ``advTm`` 而创建），则把整个切换元素一并移除，恢复未设置前的状态；
+    若切换元素带有切换效果等其它配置，则保留元素与效果。
+
+    Args:
+        slide: 目标幻灯片对象。
+
+    Returns:
+        是否发生了实际清除（False 表示原本就没有 ``advTm``）。
+    """
+    return _clear_adv_tm(slide._element)
+
+
 def _set_adv_tm(slide_element, delay_ms: int) -> None:
     """在幻灯片根元素上设置/更新 ``advTm`` 属性（毫秒）。
 
@@ -63,3 +80,26 @@ def _set_adv_tm(slide_element, delay_ms: int) -> None:
             slide_element.append(transition)
 
     transition.set("advTm", str(delay_ms))
+
+
+def _clear_adv_tm(slide_element) -> bool:
+    """从幻灯片根元素上移除 ``advTm`` 属性。
+
+    Args:
+        slide_element: 幻灯片的 lxml 根元素（``slide._element``）。
+
+    Returns:
+        True 表示原存在 ``advTm`` 并已移除；False 表示无需处理。
+    """
+    transition = slide_element.find(f"{{{P_NS}}}transition")
+    if transition is None or transition.get("advTm") is None:
+        return False
+
+    del transition.attrib["advTm"]
+
+    # 仅承载 advTm 的空 <p:transition>：整体移除，恢复未设置前状态；
+    # 带有属性（如 spd）或切换效果子元素时保留。
+    if not transition.attrib and len(transition) == 0:
+        slide_element.remove(transition)
+
+    return True

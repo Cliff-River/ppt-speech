@@ -9,6 +9,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
@@ -21,20 +22,24 @@ from edge_tts.exceptions import (
     WebSocketError,
 )
 from lxml import etree as lxml_etree
+from pptx import Presentation
+from pptx.util import Inches
 
 from ppt_speech import (
     PptSpeechConfig,
+    clear_advance_after_time,
     embed_audio_autoplay,
     get_audio_duration,
     normalize_voice_name,
     process_slides,
     read_notes_text,
+    remove_embedded_audio,
     set_advance_after_time,
     speak_ppt_notes,
     text_to_mp3,
 )
 from ppt_speech.audio import P14_NS, P_NS, _apply_autoplay_timing
-from ppt_speech.slide_transition import _set_adv_tm
+from ppt_speech.slide_transition import _clear_adv_tm, _set_adv_tm
 
 
 NSMAP = {"p": P_NS, "p14": P14_NS}
@@ -529,6 +534,259 @@ class TestEmbedAudioAutoplay(unittest.TestCase):
         self.assertIn("width", call_kwargs)
 
 
+class TestRemoveEmbeddedAudio(unittest.TestCase):
+    """remove_embedded_audio 函数测试（真实 python-pptx 幻灯片）。"""
+
+    def setUp(self) -> None:
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.audio_path = self.temp_dir / "slide_1.mp3"
+        self.audio_path.write_bytes(b"ID3" + b"\x00" * 200)
+        self.prs = Presentation()
+        self.slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
+
+    def tearDown(self) -> None:
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _pic_count(self) -> int:
+        return len(self.slide._element.findall(f".//{{{P_NS}}}pic"))
+
+    def _video_timing_count(self) -> int:
+        return len(self.slide._element.findall(f".//{{{P_NS}}}video"))
+
+    def test_plain_slide_removes_nothing(self) -> None:
+        """空白幻灯片清理返回 0，且不产生副作用。"""
+        timing_before = self.slide._element.find(f"{{{P_NS}}}timing")
+        self.assertEqual(remove_embedded_audio(self.slide), 0)
+        self.assertEqual(self._pic_count(), 0)
+        self.assertEqual(
+            self.slide._element.find(f"{{{P_NS}}}timing") is not None,
+            timing_before is not None,
+        )
+
+    def test_removes_shape_timing_and_rels(self) -> None:
+        """嵌入后清理：形状、时序、媒体/图片关系全部移除。"""
+        embed_audio_autoplay(self.slide, self.audio_path)
+        self.assertEqual(self._pic_count(), 1)
+
+        removed = remove_embedded_audio(self.slide)
+
+        self.assertEqual(removed, 1)
+        self.assertEqual(self._pic_count(), 0)
+        self.assertEqual(self._video_timing_count(), 0)
+        self.assertIsNone(
+            self.slide._element.find(f"{{{P_NS}}}timing"),
+            "空骨架 p:timing 应整体移除",
+        )
+        rel_suffixes = {
+            rel.reltype.rsplit("/", 1)[-1]
+            for rel in self.slide.part.rels.values()
+            if not rel.is_external
+        }
+        self.assertNotIn("media", rel_suffixes)
+        self.assertNotIn("video", rel_suffixes)
+        self.assertNotIn("image", rel_suffixes)
+
+    def test_media_parts_dropped_from_saved_package(self) -> None:
+        """清理并保存后，包内不再保留旧 MP3/海报帧部件。"""
+        embed_audio_autoplay(self.slide, self.audio_path)
+        remove_embedded_audio(self.slide)
+
+        out_path = self.temp_dir / "stripped.pptx"
+        self.prs.save(str(out_path))
+
+        with zipfile.ZipFile(out_path) as archive:
+            media_parts = [
+                name
+                for name in archive.namelist()
+                if name.startswith("ppt/media/")
+            ]
+        self.assertEqual(media_parts, [])
+
+    def test_legacy_unmarked_audio_is_recognized(self) -> None:
+        """无标记的历史版本产物：经保存重开后仍能按音频部件识别并清理。"""
+        embed_audio_autoplay(self.slide, self.audio_path)
+        cnvpr = self.slide._element.find(
+            f".//{{{P_NS}}}pic/{{{P_NS}}}nvPicPr/{{{P_NS}}}cNvPr"
+        )
+        del cnvpr.attrib["descr"]
+        legacy_path = self.temp_dir / "legacy.pptx"
+        self.prs.save(str(legacy_path))
+
+        reopened = Presentation(str(legacy_path))
+        reopened_slide = reopened.slides[0]
+        self.assertEqual(remove_embedded_audio(reopened_slide), 1)
+        self.assertEqual(
+            len(reopened_slide._element.findall(f".//{{{P_NS}}}pic")), 0
+        )
+
+        redubbed_path = self.temp_dir / "redubbed.pptx"
+        reopened.save(str(redubbed_path))
+        with zipfile.ZipFile(redubbed_path) as archive:
+            media_parts = [
+                name
+                for name in archive.namelist()
+                if name.startswith("ppt/media/")
+            ]
+        self.assertEqual(media_parts, [])
+
+    def test_user_video_is_not_removed(self) -> None:
+        """用户自行插入的 video/mp4 不应被当作旧配音删除。"""
+        video_path = self.temp_dir / "user.mp4"
+        video_path.write_bytes(b"\x00" * 200)
+        self.slide.shapes.add_movie(
+            str(video_path),
+            left=Inches(1),
+            top=Inches(1),
+            width=Inches(2),
+            height=Inches(2),
+            poster_frame_image=None,
+            mime_type="video/mp4",
+        )
+
+        self.assertEqual(remove_embedded_audio(self.slide), 0)
+        self.assertEqual(self._pic_count(), 1)
+        self.assertEqual(self._video_timing_count(), 1)
+        self.assertIsNotNone(
+            self.slide._element.find(f"{{{P_NS}}}timing")
+        )
+
+    def test_keeps_user_video_when_stripping_dubbing(self) -> None:
+        """同页用户视频与本工具配音共存时，只删除配音，保留视频与时序。"""
+        video_path = self.temp_dir / "user.mp4"
+        video_path.write_bytes(b"\x00" * 200)
+        self.slide.shapes.add_movie(
+            str(video_path),
+            left=Inches(1),
+            top=Inches(1),
+            width=Inches(2),
+            height=Inches(2),
+            poster_frame_image=None,
+            mime_type="video/mp4",
+        )
+        embed_audio_autoplay(self.slide, self.audio_path)
+        self.assertEqual(self._pic_count(), 2)
+
+        removed = remove_embedded_audio(self.slide)
+
+        self.assertEqual(removed, 1)
+        self.assertEqual(self._pic_count(), 1)
+        self.assertEqual(self._video_timing_count(), 1)
+        self.assertIsNotNone(
+            self.slide._element.find(f"{{{P_NS}}}timing")
+        )
+
+
+class TestEmbedAudioAutoplayIdempotency(unittest.TestCase):
+    """embed_audio_autoplay 重复调用的幂等性测试。"""
+
+    def setUp(self) -> None:
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.audio_path = self.temp_dir / "slide_1.mp3"
+        self.audio_path.write_bytes(b"ID3" + b"\x00" * 200)
+        self.prs = Presentation()
+        self.slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
+
+    def tearDown(self) -> None:
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_repeated_embed_does_not_accumulate(self) -> None:
+        """连续嵌入三次：始终只有一个形状、一个时序节点，且带标记。"""
+        removed_first = embed_audio_autoplay(self.slide, self.audio_path)
+        removed_second = embed_audio_autoplay(self.slide, self.audio_path)
+        removed_third = embed_audio_autoplay(self.slide, self.audio_path)
+
+        self.assertEqual(removed_first, 0)
+        self.assertEqual(removed_second, 1)
+        self.assertEqual(removed_third, 1)
+
+        pics = self.slide._element.findall(f".//{{{P_NS}}}pic")
+        videos = self.slide._element.findall(f".//{{{P_NS}}}video")
+        self.assertEqual(len(pics), 1)
+        self.assertEqual(len(videos), 1)
+
+        cnvpr = pics[0].find(f"{{{P_NS}}}nvPicPr/{{{P_NS}}}cNvPr")
+        self.assertEqual(cnvpr.get("descr"), "ppt-speech:dubbing-audio")
+
+    def test_repeated_embed_keeps_single_media_part(self) -> None:
+        """重复嵌入保存后包内仅保留一份 MP3 媒体部件。"""
+        embed_audio_autoplay(self.slide, self.audio_path)
+        embed_audio_autoplay(self.slide, self.audio_path)
+        embed_audio_autoplay(self.slide, self.audio_path)
+
+        out_path = self.temp_dir / "idempotent.pptx"
+        self.prs.save(str(out_path))
+
+        with zipfile.ZipFile(out_path) as archive:
+            mp3_parts = [
+                name
+                for name in archive.namelist()
+                if name.startswith("ppt/media/") and name.endswith(".mp3")
+            ]
+        self.assertEqual(len(mp3_parts), 1)
+
+    def test_validation_runs_before_cleanup(self) -> None:
+        """参数校验失败时不应先破坏既有配音。"""
+        embed_audio_autoplay(self.slide, self.audio_path)
+        with self.assertRaises(ValueError):
+            embed_audio_autoplay(self.slide, self.audio_path, icon_size=0)
+        self.assertEqual(
+            len(self.slide._element.findall(f".//{{{P_NS}}}pic")), 1
+        )
+
+    def test_redub_saved_file_in_new_session(self) -> None:
+        """已配音文件保存后重新打开并再次嵌入（回归：不得抛 AttributeError）。
+
+        python-pptx 1.0.x 的 PartFactory 未注册 audio/mpeg，重载后音频
+        部件成为无 sha1 的基类 Part；add_movie 会扫描包内**所有**媒体
+        关系，因此重配任意一页时，其它页面残留的音频部件即触发
+        ``AttributeError: 'Part' object has no attribute 'sha1'``。
+        需要至少两页才能复现（重配页自身的旧关系已被先清理）。
+        """
+        # 使用独立演示文稿，避免混入 setUp 中已有的空白页
+        prs = Presentation()
+        slides = [
+            prs.slides.add_slide(prs.slide_layouts[6]) for _ in range(2)
+        ]
+        audio_paths = []
+        for idx, slide in enumerate(slides):
+            audio_path = self.temp_dir / f"slide_{idx}.mp3"
+            audio_path.write_bytes(b"ID3" + bytes([idx]) * 200)
+            audio_paths.append(audio_path)
+            embed_audio_autoplay(slide, audio_path)
+
+        first_path = self.temp_dir / "first.pptx"
+        prs.save(str(first_path))
+
+        # 模拟下一次配音：重新打开文件，仅重配第 1 页（第 2 页关系仍在）
+        reopened = Presentation(str(first_path))
+        reopened_slide = reopened.slides[0]
+        # 修复前此行即抛出 AttributeError
+        removed = embed_audio_autoplay(reopened_slide, audio_paths[0])
+        self.assertEqual(removed, 1)
+
+        second_path = self.temp_dir / "second.pptx"
+        reopened.save(str(second_path))
+
+        with zipfile.ZipFile(second_path) as archive:
+            mp3_parts = [
+                name
+                for name in archive.namelist()
+                if name.startswith("ppt/media/") and name.endswith(".mp3")
+            ]
+        self.assertEqual(len(mp3_parts), 2)
+
+    def test_audio_content_types_registered_as_media_part(self) -> None:
+        """常见音频 content-type 已注册到 PartFactory，重载即为 MediaPart。"""
+        from pptx.opc.package import PartFactory
+        from pptx.parts.media import MediaPart
+
+        self.assertIs(
+            PartFactory.part_type_for["audio/mpeg"], MediaPart
+        )
+
+
 class TestProcessSlides(unittest.IsolatedAsyncioTestCase):
     """process_slides 函数测试。"""
 
@@ -840,6 +1098,83 @@ class TestSetAdvanceAfterTime(unittest.TestCase):
             set_advance_after_time(MagicMock(), -1.0)
 
 
+class TestClearAdvanceAfterTime(unittest.TestCase):
+    """clear_advance_after_time / _clear_adv_tm 测试。"""
+
+    def test_clear_removes_bare_transition(self) -> None:
+        """仅承载 advTm 的空 transition 应随 advTm 一并移除。"""
+        xml = f'<p:sld xmlns:p="{P_NS}"><p:cSld/><p:timing/></p:sld>'
+        el = lxml_etree.fromstring(xml.encode())
+        _set_adv_tm(el, 5000)
+        self.assertIsNotNone(el.find(f"{{{P_NS}}}transition"))
+
+        changed = _clear_adv_tm(el)
+
+        self.assertTrue(changed)
+        self.assertIsNone(el.find(f"{{{P_NS}}}transition"))
+        # schema 顺序未被破坏
+        self.assertEqual(
+            [child.tag for child in el],
+            [f"{{{P_NS}}}cSld", f"{{{P_NS}}}timing"],
+        )
+
+    def test_clear_keeps_transition_effect(self) -> None:
+        """带切换效果的 transition 仅删除 advTm，保留效果子元素。"""
+        xml = (
+            f'<p:sld xmlns:p="{P_NS}"><p:cSld/>'
+            f'<p:transition advTm="3000"><p:fade/></p:transition>'
+            f"<p:timing/></p:sld>"
+        )
+        el = lxml_etree.fromstring(xml.encode())
+
+        changed = _clear_adv_tm(el)
+
+        self.assertTrue(changed)
+        transitions = el.findall(f"{{{P_NS}}}transition")
+        self.assertEqual(len(transitions), 1)
+        self.assertIsNone(transitions[0].get("advTm"))
+        self.assertIsNotNone(transitions[0].find(f"{{{P_NS}}}fade"))
+
+    def test_clear_without_transition_is_noop(self) -> None:
+        """没有 transition 时返回 False。"""
+        xml = f'<p:sld xmlns:p="{P_NS}"><p:cSld/></p:sld>'
+        el = lxml_etree.fromstring(xml.encode())
+        self.assertFalse(_clear_adv_tm(el))
+
+    def test_clear_without_advtm_is_noop(self) -> None:
+        """有 transition 但无 advTm 时返回 False，元素保持原样。"""
+        xml = (
+            f'<p:sld xmlns:p="{P_NS}"><p:cSld/>'
+            f'<p:transition spd="slow"/></p:sld>'
+        )
+        el = lxml_etree.fromstring(xml.encode())
+        self.assertFalse(_clear_adv_tm(el))
+        trans = el.find(f"{{{P_NS}}}transition")
+        self.assertEqual(trans.get("spd"), "slow")
+
+    def test_repeated_clear_is_idempotent(self) -> None:
+        """重复清除：第二次返回 False 且无异常。"""
+        xml = f'<p:sld xmlns:p="{P_NS}"><p:cSld/></p:sld>'
+        el = lxml_etree.fromstring(xml.encode())
+        _set_adv_tm(el, 1000)
+        self.assertTrue(_clear_adv_tm(el))
+        self.assertFalse(_clear_adv_tm(el))
+
+    def test_set_then_clear_roundtrip(self) -> None:
+        """设置后清除恢复未设置状态；再次设置仍正常工作。"""
+        xml = f'<p:sld xmlns:p="{P_NS}"><p:cSld/></p:sld>'
+        el = lxml_etree.fromstring(xml.encode())
+
+        _set_adv_tm(el, 2000)
+        _clear_adv_tm(el)
+        self.assertIsNone(el.find(f"{{{P_NS}}}transition"))
+
+        _set_adv_tm(el, 4000)
+        trans = el.find(f"{{{P_NS}}}transition")
+        self.assertIsNotNone(trans)
+        self.assertEqual(trans.get("advTm"), "4000")
+
+
 class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
     """自动翻页集成测试。"""
 
@@ -975,6 +1310,135 @@ class TestAutoAdvance(unittest.IsolatedAsyncioTestCase):
 
         # delay = 10.0 + 0.5 = 10.5
         mock_set_advance.assert_called_once_with(mock_slide, 10.5)
+
+
+class TestDubbingIdempotency(unittest.IsolatedAsyncioTestCase):
+    """重复配音幂等性集成测试（真实嵌入，仅模拟 TTS/备注/时长）。"""
+
+    def setUp(self) -> None:
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.prs = Presentation()
+        self.slides = [
+            self.prs.slides.add_slide(self.prs.slide_layouts[6])
+            for _ in range(2)
+        ]
+
+    def tearDown(self) -> None:
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _make_config(self, **overrides) -> PptSpeechConfig:
+        defaults = dict(
+            input_dir=self.temp_dir,
+            output_dir=self.temp_dir,
+            input_filename="input.pptx",
+            output_filename="output.pptx",
+            auto_advance=True,
+            auto_advance_delay=2.0,
+        )
+        defaults.update(overrides)
+        return PptSpeechConfig(**defaults)
+
+    @staticmethod
+    def _slide_state(slide) -> tuple[int, int, "str | None"]:
+        element = slide._element
+        pics = len(element.findall(f".//{{{P_NS}}}pic"))
+        videos = len(element.findall(f".//{{{P_NS}}}video"))
+        transition = element.find(f"{{{P_NS}}}transition")
+        adv_tm = (
+            transition.get("advTm")
+            if transition is not None
+            else None
+        )
+        return pics, videos, adv_tm
+
+    async def _run(self, notes: list[str], config: PptSpeechConfig) -> None:
+        async def fake_tts(text, save_path, **_kwargs):
+            save_path = Path(save_path)
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            save_path.write_bytes(b"ID3" + b"\x00" * 100)
+            return True
+
+        with patch(
+            "ppt_speech.core.pipeline.read_notes_text",
+            side_effect=notes,
+        ), patch(
+            "ppt_speech.core.pipeline.text_to_mp3",
+            new=AsyncMock(side_effect=fake_tts),
+        ), patch(
+            "ppt_speech.core.pipeline.get_audio_duration",
+            return_value=4.0,
+        ):
+            await process_slides(self.prs, config)
+
+    async def test_repeated_process_is_idempotent(self) -> None:
+        """同一演示文稿连续配音两轮：形状/时序不叠加，定时被更新。"""
+        config = self._make_config()
+        await self._run(["第一页", "第二页"], config)
+        with zipfile.ZipFile(config.output_path) as archive:
+            mp3_after_first = len(
+                [
+                    name
+                    for name in archive.namelist()
+                    if name.startswith("ppt/media/")
+                    and name.endswith(".mp3")
+                ]
+            )
+
+        await self._run(["第一页新", "第二页新"], config)
+
+        for slide in self.slides:
+            pics, videos, adv_tm = self._slide_state(slide)
+            self.assertEqual(pics, 1)
+            self.assertEqual(videos, 1)
+            # 4.0s 音频 + 2.0s 缓冲 = 6000ms
+            self.assertEqual(adv_tm, "6000")
+
+        with zipfile.ZipFile(config.output_path) as archive:
+            mp3_after_second = len(
+                [
+                    name
+                    for name in archive.namelist()
+                    if name.startswith("ppt/media/")
+                    and name.endswith(".mp3")
+                ]
+            )
+        # 两轮后媒体部件数量不增长（相同字节本就被包级去重）
+        self.assertEqual(mp3_after_second, mp3_after_first)
+
+    async def test_notes_removed_on_rerun_strips_old_dubbing(self) -> None:
+        """首轮有备注、次轮备注清空：旧配音与旧翻页定时应被一并清除。"""
+        config = self._make_config()
+        await self._run(["第一页", "第二页"], config)
+        for slide in self.slides:
+            self.assertEqual(self._slide_state(slide)[0], 1)
+
+        await self._run(["", ""], config)
+
+        for slide in self.slides:
+            pics, videos, adv_tm = self._slide_state(slide)
+            self.assertEqual(pics, 0)
+            self.assertEqual(videos, 0)
+            self.assertIsNone(adv_tm)
+            self.assertIsNone(
+                slide._element.find(f"{{{P_NS}}}timing")
+            )
+
+    async def test_disable_autoadvance_on_rerun_clears_old_timing(self) -> None:
+        """首轮开启自动翻页、次轮关闭：旧 advTm 被清除，音频保留。"""
+        config_on = self._make_config(auto_advance=True)
+        await self._run(["第一页", "第二页"], config_on)
+
+        config_off = self._make_config(
+            auto_advance=False, output_filename="output2.pptx"
+        )
+        await self._run(["第一页", "第二页"], config_off)
+
+        for slide in self.slides:
+            pics, videos, adv_tm = self._slide_state(slide)
+            self.assertEqual(pics, 1)
+            self.assertEqual(videos, 1)
+            self.assertIsNone(adv_tm)
 
 
 class TestMain(unittest.IsolatedAsyncioTestCase):

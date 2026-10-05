@@ -6,7 +6,11 @@
 ``@patch('ppt_speech.pipeline.read_notes_text')`` 等测试路径继续有效。
 """
 
-from ppt_speech.core.audio import embed_audio_autoplay, get_audio_duration
+from ppt_speech.core.audio import (
+    embed_audio_autoplay,
+    get_audio_duration,
+    remove_embedded_audio,
+)
 from ppt_speech.core.config import PptSpeechConfig
 from ppt_speech.core.notes_reader import read_notes_text
 from ppt_speech.core.pipeline import (
@@ -22,7 +26,10 @@ from ppt_speech.core.pipeline import (
     process_slides,
     speak_ppt_notes,
 )
-from ppt_speech.core.slide_transition import set_advance_after_time
+from ppt_speech.core.slide_transition import (
+    clear_advance_after_time,
+    set_advance_after_time,
+)
 from ppt_speech.core.tts_client import text_to_mp3
 
 __all__ = [
@@ -39,8 +46,10 @@ __all__ = [
     "read_notes_text",
     "text_to_mp3",
     "embed_audio_autoplay",
+    "remove_embedded_audio",
     "get_audio_duration",
     "set_advance_after_time",
+    "clear_advance_after_time",
     "speak_ppt_notes",
     "process_slides",
 ]

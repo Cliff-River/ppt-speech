@@ -6,8 +6,10 @@
 2. 打开 PPT 演示文稿
 3. 逐页提取备注（使用 :mod:`ppt_speech.core.notes_reader`）
 4. 调用 TTS 服务生成音频（使用 :mod:`ppt_speech.core.tts_client`）
-5. 将音频嵌入幻灯片并配置自动播放（使用 :mod:`ppt_speech.core.audio`）
-6. 按需按「音频时长 + n 秒」设置自动翻页（使用 :mod:`ppt_speech.core.slide_transition`）
+5. 清除该页旧配音后嵌入新音频并配置自动播放（使用 :mod:`ppt_speech.core.audio`）；
+   重复配音因此保持幂等，不会叠加旧音频/旧自动播放
+6. 按需按「音频时长 + n 秒」设置自动翻页（使用 :mod:`ppt_speech.core.slide_transition`）；
+   无备注的页面会清除历史配音与旧翻页定时
 7. 保存输出 PPT 并清理临时音频文件
 
 中间音频文件统一存放在临时目录中：默认通过 :func:`tempfile.TemporaryDirectory`
@@ -39,10 +41,17 @@ from typing import Callable, Optional, TypedDict
 from pptx import Presentation
 from pptx.slide import Slide
 
-from ppt_speech.core.audio import embed_audio_autoplay, get_audio_duration
+from ppt_speech.core.audio import (
+    embed_audio_autoplay,
+    get_audio_duration,
+    remove_embedded_audio,
+)
 from ppt_speech.core.config import PptSpeechConfig
 from ppt_speech.core.notes_reader import read_notes_text
-from ppt_speech.core.slide_transition import set_advance_after_time
+from ppt_speech.core.slide_transition import (
+    clear_advance_after_time,
+    set_advance_after_time,
+)
 from ppt_speech.core.tts_client import text_to_mp3
 
 __all__ = ["speak_ppt_notes", "process_slides"]
@@ -310,6 +319,12 @@ async def process_slides(
             note_text = read_notes_text(slide)
 
             if not note_text:
+                # 幂等保证：该页不再配音，清除历史配音残留（旧音频形状、
+                # 自动播放时序）及其自动翻页定时，避免重复处理后页面上
+                # 残留旧旁白或过期的翻页时间。
+                if remove_embedded_audio(slide):
+                    clear_advance_after_time(slide)
+
                 msg = f"【第{idx}页】无备注，跳过配音"
                 _log(on_progress, msg)
                 _emit_progress(
@@ -337,7 +352,9 @@ async def process_slides(
                 _emit_progress(
                     on_progress, start, STAGE_EMBEDDING, idx, total, "嵌入音频"
                 )
-                embed_audio_autoplay(
+                # embed_audio_autoplay 内部会先清除该页旧配音再嵌入，
+                # 返回被清除的旧配音形状数量；重复配音因此保持幂等。
+                removed_audio = embed_audio_autoplay(
                     slide,
                     audio_file,
                     icon_offset=config.audio_icon_offset,
@@ -354,6 +371,9 @@ async def process_slides(
                         start=start,
                         on_progress=on_progress,
                     )
+                elif removed_audio:
+                    # 本次重新配音关闭了自动翻页：清除上一轮遗留的旧定时。
+                    clear_advance_after_time(slide)
 
         _emit_progress(on_progress, start, STAGE_SAVING, 0, total, "保存输出文件")
         config.output_dir.mkdir(parents=True, exist_ok=True)

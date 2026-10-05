@@ -58,11 +58,18 @@ OOXML 时序，使其在幻灯片进入时自动播放。同时根据每页音�
   ``⚠️`` 警告），不影响整体配音与保存流程。
 """
 
-from ppt_speech.core.audio import embed_audio_autoplay, get_audio_duration
+from ppt_speech.core.audio import (
+    embed_audio_autoplay,
+    get_audio_duration,
+    remove_embedded_audio,
+)
 from ppt_speech.core.config import PptSpeechConfig
 from ppt_speech.core.notes_reader import read_notes_text
 from ppt_speech.core.pipeline import process_slides, speak_ppt_notes
-from ppt_speech.core.slide_transition import set_advance_after_time
+from ppt_speech.core.slide_transition import (
+    clear_advance_after_time,
+    set_advance_after_time,
+)
 from ppt_speech.core.tts_client import (
     get_voices_list,
     normalize_voice_name,
@@ -72,6 +79,7 @@ from ppt_speech.core.tts_client import (
 __all__ = [
     "PptSpeechConfig",
     "embed_audio_autoplay",
+    "remove_embedded_audio",
     "get_audio_duration",
     "get_voices_list",
     "main",
@@ -79,6 +87,7 @@ __all__ = [
     "process_slides",
     "read_notes_text",
     "set_advance_after_time",
+    "clear_advance_after_time",
     "speak_ppt_notes",
     "text_to_mp3",
 ]

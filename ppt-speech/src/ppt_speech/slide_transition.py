@@ -5,8 +5,15 @@
 """
 
 from ppt_speech.core.slide_transition import (
+    _clear_adv_tm,
     _set_adv_tm,
+    clear_advance_after_time,
     set_advance_after_time,
 )
 
-__all__ = ["set_advance_after_time", "_set_adv_tm"]
+__all__ = [
+    "set_advance_after_time",
+    "clear_advance_after_time",
+    "_set_adv_tm",
+    "_clear_adv_tm",
+]

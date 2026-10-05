@@ -11,6 +11,7 @@ from ppt_speech.core.audio.embedder import (
     P_NS,
     _apply_autoplay_timing,
     embed_audio_autoplay,
+    remove_embedded_audio,
 )
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "P14_NS",
     "get_audio_duration",
     "embed_audio_autoplay",
+    "remove_embedded_audio",
     "_apply_autoplay_timing",
 ]

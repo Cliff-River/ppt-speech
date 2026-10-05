@@ -11,7 +11,9 @@
 公共接口
 --------
 - :func:`get_audio_duration`：读取音频文件播放时长（秒）。
-- :func:`embed_audio_autoplay`：将音频嵌入幻灯片并配置进入时自动播放。
+- :func:`embed_audio_autoplay`：将音频嵌入幻灯片并配置进入时自动播放
+  （嵌入前自动清除旧配音，保证重复配音幂等）。
+- :func:`remove_embedded_audio`：清除幻灯片上本工具嵌入的旧配音。
 - ``P_NS`` / ``P14_NS``：PowerPoint OOXML 主要 / 2010 扩展命名空间常量。
 - :func:`_apply_autoplay_timing`：直接修改幻灯片 XML 时序以触发自动播放。
 
@@ -24,6 +26,7 @@ from ppt_speech.core.audio.embedder import (
     P_NS,
     _apply_autoplay_timing,
     embed_audio_autoplay,
+    remove_embedded_audio,
 )
 
 __all__ = [
@@ -31,5 +34,6 @@ __all__ = [
     "P14_NS",
     "get_audio_duration",
     "embed_audio_autoplay",
+    "remove_embedded_audio",
     "_apply_autoplay_timing",
 ]
