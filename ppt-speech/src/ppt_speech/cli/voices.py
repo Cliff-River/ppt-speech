@@ -109,11 +109,9 @@ def filter_voices(
             voice_locale = str(voice.get("Locale", "")).lower()
             if not voice_locale.startswith(locale.lower()):
                 continue
-        if gender is not None:
-            if str(voice.get("Gender", "")).lower() != gender.lower():
+        if (gender is not None) and str(voice.get("Gender", "")).lower() != gender.lower():
                 continue
-        if voice_type is not None:
-            if voice_type.lower() not in _voice_type_text(voice).lower():
+        if (voice_type is not None) and voice_type.lower() not in _voice_type_text(voice).lower():
                 continue
         result.append(voice)
     return result
@@ -137,10 +135,10 @@ def format_voices_table(voices: list[dict[str, Any]]) -> str:
     lines = [header, "-" * len(header)]
     for voice in voices:
         lines.append(
-            f"{str(voice.get('ShortName', '')):<{name_width}} "
-            f"{str(voice.get('Gender', '')):<8} "
-            f"{str(voice.get('Locale', '')):<{locale_width}} "
-            f"{str(voice.get('FriendlyName', ''))}"
+            f"{voice.get('ShortName', '')!s:<{name_width}} "
+            f"{voice.get('Gender', '')!s:<8} "
+            f"{voice.get('Locale', '')!s:<{locale_width}} "
+            f"{voice.get('FriendlyName', '')!s}"
         )
     return "\n".join(lines)
 

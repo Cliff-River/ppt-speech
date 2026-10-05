@@ -63,20 +63,24 @@ from ppt_speech.core.config import PptSpeechConfig
 from ppt_speech.core.notes_reader import read_notes_text
 from ppt_speech.core.pipeline import process_slides, speak_ppt_notes
 from ppt_speech.core.slide_transition import set_advance_after_time
-from ppt_speech.core.tts_client import get_voices_list, normalize_voice_name, text_to_mp3
+from ppt_speech.core.tts_client import (
+    get_voices_list,
+    normalize_voice_name,
+    text_to_mp3,
+)
 
 __all__ = [
     "PptSpeechConfig",
-    "speak_ppt_notes",
-    "process_slides",
-    "get_audio_duration",
     "embed_audio_autoplay",
-    "read_notes_text",
-    "set_advance_after_time",
-    "text_to_mp3",
-    "normalize_voice_name",
+    "get_audio_duration",
     "get_voices_list",
     "main",
+    "normalize_voice_name",
+    "process_slides",
+    "read_notes_text",
+    "set_advance_after_time",
+    "speak_ppt_notes",
+    "text_to_mp3",
 ]
 
 
@@ -91,7 +95,6 @@ def main() -> None:
     输出 ``data/output.pptx``）；如需自定义路径、语音或语速，请改用
     :func:`speak_ppt_notes` 显式传入配置对象。
     """
-    import asyncio
 
     from ppt_speech.cli.main import main as cli_main
 
