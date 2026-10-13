@@ -23,6 +23,35 @@ _VOICE_PATTERN = re.compile(r"^([a-z]{2,})-([A-Z]{2,})-(.+Neural)$")
 _RATE_PATTERN = re.compile(r"^[+-]\d+%$")
 
 
+def _patch_edge_tts_endpoint() -> None:
+    """将 edge-tts 的合成端点切换到微软 v2 接口。
+
+    微软自 2026-10 起逐步弃用 legacy 合成端点
+    ``speech.platform.bing.com``，在多数地区返回 403。
+    Edge 155 改用 ``api.msedgeservices.com``，该端点接受
+    原有 TrustedClientToken（以 ``Ocp-Apim-Subscription-Key``
+    传入）及旧版 Sec-MS-GEC/Version，无需改动 DRM 逻辑。
+
+    由于 ``communicate`` 模块通过 ``from .constants import WSS_URL``
+    直接绑定了旧值，必须同时修补两个命名空间才能生效。
+
+    参考：https://github.com/rany2/edge-tts/pull/491
+    """
+    import edge_tts.communicate as _communicate
+    import edge_tts.constants as _constants
+
+    token = _constants.TRUSTED_CLIENT_TOKEN
+    new_wss_url = (
+        "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+        f"?Ocp-Apim-Subscription-Key={token}"
+    )
+    _constants.WSS_URL = new_wss_url
+    _communicate.WSS_URL = new_wss_url
+
+
+_patch_edge_tts_endpoint()
+
+
 def normalize_voice_name(voice_name: str) -> str:
     """将简短语音名称转换为 edge-tts 完整格式。
 
