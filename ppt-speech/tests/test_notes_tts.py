@@ -111,6 +111,67 @@ class TestPTSpeechConfig(unittest.TestCase):
         self.assertIn("语音名称格式错误", str(ctx.exception))
 
     @patch("pathlib.Path.exists", return_value=True)
+    def test_validate_typo_voice_with_known_list_suggests(
+        self, mock_exists: MagicMock
+    ) -> None:
+        """外形合法但拼写错误的语音应报「不存在」并给出相似建议。"""
+        known = {
+            "zh-CN-XiaoxiaoNeural",
+            "en-AU-WilliamMultilingualNeural",
+            "en-AU-NatashaNeural",
+        }
+        config = PptSpeechConfig(voice_name="en-AU-WilliamMultilingualNeura")
+        with self.assertRaises(ValueError) as ctx:
+            config.validate(known_voices=known)
+        message = str(ctx.exception)
+        self.assertIn("语音不存在", message)
+        self.assertNotIn("格式错误", message)
+        self.assertIn("en-AU-WilliamMultilingualNeural", message)
+
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_validate_known_voice_with_list_passes(
+        self, mock_exists: MagicMock
+    ) -> None:
+        """已知列表中的语音应通过校验（含方言多段名称）。"""
+        known = {"zh-CN-XiaoxiaoNeural", "zh-CN-liaoning-XiaobeiNeural"}
+        for voice in known:
+            PptSpeechConfig(voice_name=voice).validate(known_voices=known)
+
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_validate_malformed_voice_with_list_still_format_error(
+        self, mock_exists: MagicMock
+    ) -> None:
+        """提供语音列表时，完全不符合外形的输入仍报格式错误。"""
+        config = PptSpeechConfig(voice_name="bad-voice")
+        with self.assertRaises(ValueError) as ctx:
+            config.validate(
+                known_voices={"zh-CN-XiaoxiaoNeural"}
+            )
+        self.assertIn("语音名称格式错误", str(ctx.exception))
+
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_validate_fake_neural_voice_not_in_list(
+        self, mock_exists: MagicMock
+    ) -> None:
+        """以 Neural 结尾但列表中不存在的语音应报「不存在」。"""
+        config = PptSpeechConfig(voice_name="zh-CN-TotallyFakeNeural")
+        with self.assertRaises(ValueError) as ctx:
+            config.validate(known_voices={"zh-CN-XiaoxiaoNeural"})
+        self.assertIn("语音不存在", str(ctx.exception))
+
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_validate_without_list_keeps_strict_format(
+        self, mock_exists: MagicMock
+    ) -> None:
+        """无已知列表（known_voices=None）时退回纯格式校验。"""
+        # 外形合法但不存在的名称在纯格式校验下可通过
+        PptSpeechConfig(voice_name="zh-CN-FakeNeural").validate()
+        # 缺少 Neural 后缀的拼写错误仍报格式错误
+        with self.assertRaises(ValueError) as ctx:
+            PptSpeechConfig(voice_name="zh-CN-XiaoxiaoNeura").validate()
+        self.assertIn("语音名称格式错误", str(ctx.exception))
+
+    @patch("pathlib.Path.exists", return_value=True)
     def test_validate_invalid_speech_rate(self, mock_exists: MagicMock) -> None:
         """测试无效语速验证。"""
         config = PptSpeechConfig(speech_rate="fast")

@@ -15,6 +15,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from ppt_speech.cli.create import load_known_voice_names, run as run_create
 from ppt_speech.cli.main import (
     _ensure_subcommand,
     _normalize_argv,
@@ -203,6 +204,81 @@ class VoicesIoTest(unittest.TestCase):
         table = format_voices_table(voices)
         for name in (v["ShortName"] for v in voices):
             self.assertIn(name, table)
+
+
+class CreateVoiceValidationTest(unittest.TestCase):
+    """create 子命令的语音缓存加载与存在性校验测试。"""
+
+    def _write_cache(self, tmp: str, content: str | list) -> str:
+        path = Path(tmp) / "voices.json"
+        data = json.dumps(content, ensure_ascii=False) if isinstance(content, list) else content
+        path.write_text(data, encoding="utf-8")
+        return str(path)
+
+    def test_load_known_voice_names_from_cache(self):
+        voices = [
+            {"ShortName": "zh-CN-XiaoxiaoNeural"},
+            {"ShortName": "en-AU-WilliamMultilingualNeural"},
+            {"no_shortname": True},
+            "not-a-dict",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = self._write_cache(tmp, voices)
+            with mock.patch("ppt_speech.cli.create.DEFAULT_CACHE_PATH", cache_path):
+                names = load_known_voice_names()
+        self.assertEqual(
+            names,
+            {"zh-CN-XiaoxiaoNeural", "en-AU-WilliamMultilingualNeural"},
+        )
+
+    def test_load_known_voice_names_missing_cache_returns_none(self):
+        with mock.patch(
+            "ppt_speech.cli.create.DEFAULT_CACHE_PATH",
+            "definitely/missing/voices.json",
+        ):
+            self.assertIsNone(load_known_voice_names())
+
+    def test_load_known_voice_names_corrupt_cache_returns_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = self._write_cache(tmp, "{not valid json")
+            with mock.patch("ppt_speech.cli.create.DEFAULT_CACHE_PATH", cache_path):
+                self.assertIsNone(load_known_voice_names())
+
+    def _make_args(self, voice: str):
+        return mock.Mock(
+            input="in.pptx",
+            output="out.pptx",
+            voice=voice,
+            rate="+0%",
+            auto_advance=True,
+        )
+
+    def test_run_typo_voice_reports_not_exist(self):
+        voices = [
+            {"ShortName": "zh-CN-YunjianNeural"},
+            {"ShortName": "en-AU-WilliamMultilingualNeural"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = self._write_cache(tmp, voices)
+            with mock.patch(
+                "ppt_speech.cli.create.DEFAULT_CACHE_PATH", cache_path
+            ), mock.patch("ppt_speech.cli.create.speak_ppt_notes") as pipeline:
+                with self.assertRaises(ValueError) as ctx:
+                    run_create(self._make_args("en-AU-WilliamMultilingualNeura"))
+        message = str(ctx.exception)
+        self.assertIn("语音不存在", message)
+        self.assertIn("en-AU-WilliamMultilingualNeural", message)
+        pipeline.assert_not_called()
+
+    def test_run_corrupt_cache_falls_back_to_format_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = self._write_cache(tmp, "broken")
+            with mock.patch(
+                "ppt_speech.cli.create.DEFAULT_CACHE_PATH", cache_path
+            ), mock.patch("ppt_speech.cli.create.speak_ppt_notes"):
+                with self.assertRaises(ValueError) as ctx:
+                    run_create(self._make_args("en-AU-WilliamMultilingualNeura"))
+        self.assertIn("语音名称格式错误", str(ctx.exception))
 
 
 class TopLevelParserTest(unittest.TestCase):

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 from pathlib import Path
 
+from ppt_speech.cli.voices import DEFAULT_CACHE_PATH, load_voices
 from ppt_speech.core import PptSpeechConfig, speak_ppt_notes
 
 
@@ -25,6 +27,26 @@ def split_path(file_path: str) -> tuple[Path, str]:
     """
     p = Path(file_path)
     return p.parent, p.name
+
+
+def load_known_voice_names() -> set[str] | None:
+    """从本地音色缓存读取全部 ShortName。
+
+    缓存文件缺失或损坏时返回 None，让配置校验退回纯格式校验，
+    不应因为缓存问题阻断配音流程。
+
+    Returns:
+        已知语音 ShortName 集合；缓存不可用时为 None。
+    """
+    try:
+        voices = load_voices(DEFAULT_CACHE_PATH)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return {
+        str(voice["ShortName"])
+        for voice in voices
+        if isinstance(voice, dict) and voice.get("ShortName")
+    }
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -88,7 +110,7 @@ def run(args: argparse.Namespace) -> None:
             ``rate``、``auto_advance`` 属性。
 
     Raises:
-        ValueError: 当语音名称或语速格式不正确时。
+        ValueError: 当语音名称格式不正确或语音不存在、语速格式不正确时。
         FileNotFoundError: 当输入 PPT 文件不存在时。
     """
     input_dir, input_filename = split_path(args.input)
@@ -103,6 +125,6 @@ def run(args: argparse.Namespace) -> None:
         speech_rate=args.rate,
         auto_advance=args.auto_advance,
     )
-    config.validate()
+    config.validate(known_voices=load_known_voice_names())
 
     asyncio.run(speak_ppt_notes(config))

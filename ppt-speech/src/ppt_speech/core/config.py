@@ -6,12 +6,65 @@
 
 from __future__ import annotations
 
+import difflib
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 
 _RATE_PATTERN = re.compile(r"^[+-]\d+%$")
+#: 严格语音名称格式：语言-区域-名称（必须以 Neural 结尾）。
 _VOICE_PATTERN = re.compile(r"^([a-z]{2,})-([A-Z]{2,})-(.+Neural)$")
+#: 宽松的语音名称外形：语言-区域-名称段（允许方言子段，
+#: 如 zh-CN-liaoning-XiaobeiNeural），用于在已知语音列表中
+#: 区分「格式错误」与「拼写错误导致的语音不存在」。
+_VOICE_SHAPE_PATTERN = re.compile(r"^[a-z]{2,}-[A-Z]{2,}(?:-[A-Za-z0-9]+)+$")
+
+
+def validate_voice_name(
+    voice_name: str,
+    known_voices: Collection[str] | None = None,
+) -> None:
+    """校验语音名称的合法性。
+
+    当 ``known_voices`` 为 None 时仅做严格格式校验（不依赖外部数据）；
+    当提供已知语音 ShortName 集合时，优先做存在性校验：
+
+    - 名称完全不符合 ``语言-区域-名称`` 外形 → 格式错误；
+    - 外形合法但列表中不存在 → 语音不存在，并尽量给出最接近的
+      语音名称作为拼写建议（如把 ``...Neura`` 纠正为 ``...Neural``）。
+
+    Args:
+        voice_name: 待校验的语音名称，如 ``zh-CN-XiaoxiaoNeural``。
+        known_voices: 已知可用的语音 ShortName 集合；为 None 时
+            退回纯格式校验。
+
+    Raises:
+        ValueError: 语音名称格式错误，或语音在已知列表中不存在。
+    """
+    if known_voices is None:
+        if not _VOICE_PATTERN.match(voice_name):
+            raise ValueError(
+                f"语音名称格式错误: '{voice_name}'，"
+                f"正确格式如 'zh-CN-XiaoxiaoNeural'"
+            )
+        return
+
+    if voice_name in known_voices:
+        return
+
+    if not _VOICE_SHAPE_PATTERN.match(voice_name):
+        raise ValueError(
+            f"语音名称格式错误: '{voice_name}'，"
+            f"正确格式如 'zh-CN-XiaoxiaoNeural'"
+        )
+
+    suggestions = difflib.get_close_matches(voice_name, known_voices, n=1)
+    hint = f"，你是否想要: '{suggestions[0]}'" if suggestions else ""
+    raise ValueError(
+        f"语音不存在: '{voice_name}'{hint}，"
+        f"可用 `ppt-speech voice` 查询全部可用语音"
+    )
 
 
 @dataclass(slots=True)
@@ -56,21 +109,22 @@ class PptSpeechConfig:
         """完整输出文件路径（output_dir + output_filename）。"""
         return self.output_dir / self.output_filename
 
-    def validate(self) -> None:
+    def validate(self, known_voices: Collection[str] | None = None) -> None:
         """验证配置参数的合法性。
 
-        对语音名称格式、语速格式以及输入文件的存在性进行校验，
+        对语音名称、语速格式以及输入文件的存在性进行校验，
         确保后续处理流程不会因为参数错误而中断。
 
+        Args:
+            known_voices: 已知可用的语音 ShortName 集合。提供时对
+                语音名称做存在性校验（不存在会报「语音不存在」并给出
+                拼写建议）；为 None 时仅做格式校验。
+
         Raises:
-            ValueError: 当语音名称或语速格式不正确时。
+            ValueError: 当语音名称/语速格式不正确或语音不存在时。
             FileNotFoundError: 当输入 PPT 文件不存在时。
         """
-        if not _VOICE_PATTERN.match(self.voice_name):
-            raise ValueError(
-                f"语音名称格式错误: '{self.voice_name}'，"
-                f"正确格式如 'zh-CN-XiaoxiaoNeural'"
-            )
+        validate_voice_name(self.voice_name, known_voices)
         if not _RATE_PATTERN.match(self.speech_rate):
             raise ValueError(
                 f"语速格式错误: '{self.speech_rate}'，"
