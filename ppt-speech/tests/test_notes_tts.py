@@ -354,7 +354,7 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
     async def test_no_audio_received_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
-        """测试 NoAudioReceived 异常处理。"""
+        """测试 NoAudioReceived 异常处理（重试耗尽后抛出）。"""
         from edge_tts.exceptions import EdgeTTSException
 
         mock_comm = AsyncMock()
@@ -362,13 +362,15 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         mock_communicate_class.return_value = mock_comm
 
         with self.assertRaises(EdgeTTSException):
-            await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
+            await text_to_mp3(
+                "测试文字", self.temp_dir / "test.mp3", max_retries=0
+            )
 
     @patch("ppt_speech.core.tts_client.Communicate")
     async def test_unexpected_response_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
-        """测试 UnexpectedResponse 异常处理。"""
+        """测试 UnexpectedResponse 异常处理（重试耗尽后抛出）。"""
         from edge_tts.exceptions import EdgeTTSException
 
         mock_comm = AsyncMock()
@@ -376,13 +378,15 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         mock_communicate_class.return_value = mock_comm
 
         with self.assertRaises(EdgeTTSException):
-            await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
+            await text_to_mp3(
+                "测试文字", self.temp_dir / "test.mp3", max_retries=0
+            )
 
     @patch("ppt_speech.core.tts_client.Communicate")
     async def test_unknown_response_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
-        """测试 UnknownResponse 异常处理。"""
+        """测试 UnknownResponse 异常处理（重试耗尽后抛出）。"""
         from edge_tts.exceptions import EdgeTTSException
 
         mock_comm = AsyncMock()
@@ -390,13 +394,15 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         mock_communicate_class.return_value = mock_comm
 
         with self.assertRaises(EdgeTTSException):
-            await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
+            await text_to_mp3(
+                "测试文字", self.temp_dir / "test.mp3", max_retries=0
+            )
 
     @patch("ppt_speech.core.tts_client.Communicate")
     async def test_websocket_error_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
-        """测试 WebSocketError 异常处理。"""
+        """测试 WebSocketError 异常处理（重试耗尽后抛出）。"""
         from edge_tts.exceptions import EdgeTTSException
 
         mock_comm = AsyncMock()
@@ -404,13 +410,15 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         mock_communicate_class.return_value = mock_comm
 
         with self.assertRaises(EdgeTTSException):
-            await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
+            await text_to_mp3(
+                "测试文字", self.temp_dir / "test.mp3", max_retries=0
+            )
 
     @patch("ppt_speech.core.tts_client.Communicate")
     async def test_os_error_handling(
         self, mock_communicate_class: MagicMock
     ) -> None:
-        """测试 OS 错误处理。"""
+        """测试 OS 错误处理：本地磁盘错误不重试，且只尝试一次。"""
         mock_comm = AsyncMock()
         mock_comm.save.side_effect = OSError("磁盘错误")
         mock_communicate_class.return_value = mock_comm
@@ -418,6 +426,117 @@ class TestTextToMP3(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OSError) as ctx:
             await text_to_mp3("测试文字", self.temp_dir / "test.mp3")
         self.assertIn("磁盘错误", str(ctx.exception))
+        mock_communicate_class.assert_called_once()
+
+    @patch("ppt_speech.core.tts_client.sleep", new_callable=AsyncMock)
+    @patch("ppt_speech.core.tts_client.Communicate")
+    async def test_transient_error_retried_then_succeeds(
+        self, mock_communicate_class: MagicMock, mock_sleep: AsyncMock
+    ) -> None:
+        """测试瞬时错误后重试：失败两次后第三次成功。"""
+        failing_comm = AsyncMock()
+        failing_comm.save.side_effect = WebSocketError("连接错误")
+        success_comm = AsyncMock()
+        mock_communicate_class.side_effect = [
+            failing_comm,
+            failing_comm,
+            success_comm,
+        ]
+
+        result = await text_to_mp3(
+            "测试文字", self.temp_dir / "test.mp3", max_retries=3
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(mock_communicate_class.call_count, 3)
+        # 两次失败各触发一次退避等待
+        self.assertEqual(mock_sleep.await_count, 2)
+        mock_sleep.assert_any_await(1.0)
+        mock_sleep.assert_any_await(2.0)
+
+    @patch("ppt_speech.core.tts_client.sleep", new_callable=AsyncMock)
+    @patch("ppt_speech.core.tts_client.Communicate")
+    async def test_retry_exhausted_raises_edge_tts_exception(
+        self, mock_communicate_class: MagicMock, mock_sleep: AsyncMock
+    ) -> None:
+        """测试重试次数耗尽后仍失败则抛出 EdgeTTSException。"""
+        from edge_tts.exceptions import EdgeTTSException
+
+        mock_comm = AsyncMock()
+        mock_comm.save.side_effect = TimeoutError("连接超时")
+        mock_communicate_class.return_value = mock_comm
+
+        with self.assertRaises(EdgeTTSException) as ctx:
+            await text_to_mp3(
+                "测试文字", self.temp_dir / "test.mp3", max_retries=2
+            )
+
+        # 首次 + 2 次重试 = 3 次尝试
+        self.assertEqual(mock_communicate_class.call_count, 3)
+        self.assertEqual(mock_sleep.await_count, 2)
+        self.assertIn("已重试 2 次", str(ctx.exception))
+
+    @patch("ppt_speech.core.tts_client.sleep", new_callable=AsyncMock)
+    @patch("ppt_speech.core.tts_client.Communicate")
+    async def test_client_error_is_retried(
+        self, mock_communicate_class: MagicMock, mock_sleep: AsyncMock
+    ) -> None:
+        """测试 aiohttp 网络异常（ClientError）会被重试。"""
+        import aiohttp
+
+        failing_comm = AsyncMock()
+        failing_comm.save.side_effect = aiohttp.ClientError("连接失败")
+        success_comm = AsyncMock()
+        mock_communicate_class.side_effect = [failing_comm, success_comm]
+
+        result = await text_to_mp3(
+            "测试文字", self.temp_dir / "test.mp3", max_retries=2
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(mock_communicate_class.call_count, 2)
+        self.assertEqual(mock_sleep.await_count, 1)
+
+    @patch("ppt_speech.core.tts_client.Communicate")
+    async def test_max_retries_zero_disables_retry(
+        self, mock_communicate_class: MagicMock
+    ) -> None:
+        """测试 max_retries=0 时不重试，失败仅尝试一次。"""
+        from edge_tts.exceptions import EdgeTTSException
+
+        mock_comm = AsyncMock()
+        mock_comm.save.side_effect = WebSocketError("连接错误")
+        mock_communicate_class.return_value = mock_comm
+
+        with self.assertRaises(EdgeTTSException):
+            await text_to_mp3(
+                "测试文字", self.temp_dir / "test.mp3", max_retries=0
+            )
+        mock_communicate_class.assert_called_once()
+
+    @patch("ppt_speech.core.tts_client.sleep", new_callable=AsyncMock)
+    @patch("ppt_speech.core.tts_client.Communicate")
+    async def test_partial_audio_discarded_on_failure(
+        self, mock_communicate_class: MagicMock, mock_sleep: AsyncMock
+    ) -> None:
+        """测试失败后残留的半成品音频被清理，不会留下空文件。"""
+        from edge_tts.exceptions import EdgeTTSException
+
+        save_path = self.temp_dir / "partial.mp3"
+
+        async def fake_save(path: str) -> None:
+            # 模拟 save 先以 wb 打开目标文件再失败，留下空文件
+            Path(path).write_bytes(b"")
+            raise WebSocketError("连接中断")
+
+        mock_comm = AsyncMock()
+        mock_comm.save.side_effect = fake_save
+        mock_communicate_class.return_value = mock_comm
+
+        with self.assertRaises(EdgeTTSException):
+            await text_to_mp3("测试文字", save_path, max_retries=2)
+
+        self.assertFalse(save_path.exists())
 
     @patch("ppt_speech.core.tts_client.Communicate")
     async def test_custom_voice_and_rate(

@@ -261,6 +261,9 @@ asyncio.run(text_to_mp3(
 ))
 ```
 
+> `text_to_mp3` 对瞬时性网络失败内置指数退避重试（`1s → 2s → 4s…`，单次上限 8s），
+> 默认重试 3 次；可用 `max_retries=` 调整，传 `0` 关闭重试。本地磁盘写入错误不重试。
+
 ## 服务端架构（HTTP + SSE）
 
 除命令行/库外，项目提供基于 FastAPI 的客户端-服务端架构：客户端上传 `.pptx`，
@@ -415,7 +418,7 @@ uv run coverage report -m
 | 现象 | 原因 | 解决方法 |
 | --- | --- | --- |
 | 服务启动失败：`无法连接 Redis ... 服务拒绝启动` | `lifespan` 启动时对 Redis `ping` 失败即 fail-fast | 确认 Redis 可达；通过环境变量 `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` 指向正确实例 |
-| TTS 合成失败 / `EdgeTTSException` | Edge TTS 需联网；网络中断或服务异常 | 检查网络连通性后重试 |
+| TTS 合成失败 / `EdgeTTSException` | Edge TTS 需联网；网络中断或服务异常 | 合成已内置指数退避自动重试（默认重试 3 次，最多 4 次尝试）；仍失败则检查网络连通性后重试 |
 | 下载结果返回 `409 not_ready` | 任务尚未完成（PENDING/PROCESSING） | 通过 SSE 进度流等待 `status: COMPLETED` 后再请求 `/result` |
 | 下载结果返回 `410 expired` | 结果文件超过 `RESULT_TTL_SECONDS`（默认 3600s）被清理协程删除 | 重新提交任务 |
 | 某页输出 `⚠️ ... 跳过自动翻页` | 该页音频缺失或时长解析失败（`get_audio_duration` 抛错） | 仅跳过该页自动翻页，不影响整体配音与保存；检查该页音频是否合成成功 |
