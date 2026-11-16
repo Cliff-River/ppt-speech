@@ -52,12 +52,12 @@ def _find_mc_wrapped_transitions(slide_element) -> list:
     mc_tag = _q(_MC_NS, "AlternateContent")
     p_trans_tag = _q(P_NS, "transition")
 
-    results: list = []
-    for child in slide_element:
-        if child.tag == mc_tag:
-            for t in child.iter(p_trans_tag):
-                results.append(t)
-    return results
+    return [
+        transition
+        for child in slide_element
+        if child.tag == mc_tag
+        for transition in child.iter(p_trans_tag)
+    ]
 
 
 def _find_direct_transition(slide_element):
@@ -106,7 +106,7 @@ def set_advance_after_time(slide: Slide, delay_seconds: float) -> None:
     if delay_seconds < 0:
         raise ValueError(f"自动翻页延迟时间不能为负数: {delay_seconds}")
 
-    delay_ms = int(round(delay_seconds * 1000))
+    delay_ms = round(delay_seconds * 1000)
     _set_adv_tm(slide._element, delay_ms)
 
 
